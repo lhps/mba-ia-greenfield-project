@@ -16,7 +16,10 @@ export class VideoUploadStartedDto {
   @ApiProperty({ enum: Object.values(PUBLICATION_STATUS) })
   publication_status: PublicationStatus;
 
-  @ApiProperty({ example: 67108864, description: 'Bytes per part (last part may be smaller)' })
+  @ApiProperty({
+    example: 67108864,
+    description: 'Bytes per part (last part may be smaller)',
+  })
   part_size: number;
 
   @ApiProperty({ example: 3 })

@@ -44,7 +44,9 @@ describe('bootstrapBucket (integration)', () => {
       client.send(new HeadBucketCommand({ Bucket: bucket })),
     ).resolves.toBeDefined();
 
-    const cors = await client.send(new GetBucketCorsCommand({ Bucket: bucket }));
+    const cors = await client.send(
+      new GetBucketCorsCommand({ Bucket: bucket }),
+    );
     expect(cors.CORSRules).toEqual([
       expect.objectContaining({
         AllowedOrigins: [origin],

@@ -54,3 +54,51 @@ export class InvalidUploadRequestException extends DomainException {
     super('VALIDATION_ERROR', 400, message);
   }
 }
+
+export class VideoNotFoundException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_FOUND', 404, 'Video not found');
+  }
+}
+
+export class VideoAccessDeniedException extends DomainException {
+  constructor() {
+    super('VIDEO_ACCESS_DENIED', 403, 'You do not own this video');
+  }
+}
+
+export class UploadNotInProgressException extends DomainException {
+  constructor() {
+    super(
+      'UPLOAD_NOT_IN_PROGRESS',
+      409,
+      'Upload is not in progress for this video',
+    );
+  }
+}
+
+export class UploadPartsInvalidException extends DomainException {
+  constructor() {
+    super(
+      'UPLOAD_PARTS_INVALID',
+      400,
+      'Uploaded parts are invalid or incomplete',
+    );
+  }
+}
+
+export class FileTooLargeException extends DomainException {
+  constructor() {
+    super(
+      'FILE_TOO_LARGE',
+      413,
+      'Uploaded file exceeds the maximum allowed size',
+    );
+  }
+}
+
+export class VideoNotReadyException extends DomainException {
+  constructor() {
+    super('VIDEO_NOT_READY', 409, 'Video is not ready for playback');
+  }
+}

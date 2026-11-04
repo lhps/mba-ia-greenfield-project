@@ -32,10 +32,7 @@ export const envValidationSchema = Joi.object({
   REDIS_PORT: Joi.number().port().default(6379),
   QUEUE_PREFIX: Joi.string().default('bull'),
   MAX_UPLOAD_BYTES: Joi.number().integer().min(1).default(10737418240),
-  UPLOAD_PART_SIZE_BYTES: Joi.number()
-    .integer()
-    .min(5242880)
-    .default(67108864),
+  UPLOAD_PART_SIZE_BYTES: Joi.number().integer().min(5242880).default(67108864),
   PRESIGNED_URL_TTL_SECONDS: Joi.number().integer().min(1).default(3600),
   STALE_UPLOAD_HOURS: Joi.number().integer().min(1).default(48),
 });

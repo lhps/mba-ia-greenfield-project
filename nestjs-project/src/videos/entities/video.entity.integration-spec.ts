@@ -109,6 +109,8 @@ describe('Video entity (integration)', () => {
     const saved = await videoRepository.save(buildVideo());
     await dataSource.getRepository(Channel).delete({ id: channel.id });
 
-    await expect(videoRepository.findOneBy({ id: saved.id })).resolves.toBeNull();
+    await expect(
+      videoRepository.findOneBy({ id: saved.id }),
+    ).resolves.toBeNull();
   });
 });

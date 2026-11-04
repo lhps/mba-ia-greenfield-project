@@ -69,8 +69,8 @@ describe('VideoProcessingQueue (integration)', () => {
 
     await producer.enqueue(videoId);
 
-    await expect(queue.getJob(videoId).then((j) => j?.getState())).resolves.toBe(
-      'waiting',
-    );
+    await expect(
+      queue.getJob(videoId).then((j) => j?.getState()),
+    ).resolves.toBe('waiting');
   });
 });

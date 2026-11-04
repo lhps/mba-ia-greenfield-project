@@ -12,6 +12,9 @@ import { DomainExceptionFilter } from '../../src/common/filters/domain-exception
 import { ValidationExceptionFilter } from '../../src/common/filters/validation-exception.filter';
 import { QUEUES } from '../../src/queue/queue.constants';
 import { cleanAllTables } from '../../src/test/create-test-data-source';
+import { User } from '../../src/users/entities/user.entity';
+import { Video } from '../../src/videos/entities/video.entity';
+import { generatePublicId } from '../../src/videos/public-id.util';
 
 export interface VideosE2eContext {
   app: INestApplication<App>;
@@ -67,7 +70,7 @@ export async function createConfirmedUser(
   email: string,
   password = 'password123',
 ): Promise<string> {
-  const mailService = (app.get(AuthService) as any).mailService;
+  const mailService = app.get(AuthService).mailService;
   let token = '';
   jest
     .spyOn(mailService, 'sendConfirmationEmail')
@@ -87,4 +90,28 @@ export async function createConfirmedUser(
     .send({ email, password })
     .expect(200);
   return login.body.access_token as string;
+}
+
+/** Inserts a video row directly (bypassing upload/processing) for read-side scenarios. */
+export async function seedVideo(
+  ctx: VideosE2eContext,
+  ownerEmail: string,
+  overrides: Partial<Video> = {},
+): Promise<Video> {
+  const user = await ctx.dataSource.getRepository(User).findOneOrFail({
+    where: { email: ownerEmail },
+    relations: { channel: true },
+  });
+  const repository = ctx.dataSource.getRepository(Video);
+  return repository.save(
+    repository.create({
+      channel_id: user.channel.id,
+      public_id: generatePublicId(),
+      file_name: 'clip.mov',
+      file_size: 1024,
+      content_type: 'video/quicktime',
+      original_key: 'unused',
+      ...overrides,
+    }),
+  );
 }

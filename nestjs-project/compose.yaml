@@ -19,6 +19,23 @@ services:
       redis:
         condition: service_healthy
 
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: npm run start:worker:dev
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+
   storage-init:
     build:
       context: .

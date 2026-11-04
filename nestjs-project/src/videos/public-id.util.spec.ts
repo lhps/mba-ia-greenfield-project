@@ -15,12 +15,9 @@ describe('generatePublicId', () => {
 });
 
 describe('isPublicId', () => {
-  it.each(['AbC_def-123', generatePublicId()])(
-    'should accept %s',
-    (value) => {
-      expect(isPublicId(value)).toBe(true);
-    },
-  );
+  it.each(['AbC_def-123', generatePublicId()])('should accept %s', (value) => {
+    expect(isPublicId(value)).toBe(true);
+  });
 
   it.each(['abc', 'AbC_def-1234', 'AbC def-123', 'AbC/def+123', ''])(
     'should reject %p',

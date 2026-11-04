@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/14 completed
+**SIs:** 14/14 completed
 
 ### SI-03.1 — Infra: Dependencies, FFmpeg Image, SeaweedFS and Redis Services
 - **Status:** completed
@@ -55,44 +55,57 @@
   - Shared E2E helper `test/helpers/videos-e2e.ts` (AppModule bootstrap like main.ts, test bucket, `bull-e2e` queue prefix, confirmed-user login) for all video specs.
 
 ### SI-03.7 — Endpoint POST /videos/:id/upload/parts (Presigned Part URLs)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 15 unit/integration (video-upload.service + video-access.service) + 6 E2E (test/videos-upload-parts.e2e-spec.ts); create E2E re-run green
+- **Observations:**
+  - Part numbers above `part_count` raise `InvalidUploadRequestException` (`VALIDATION_ERROR`, 400) instead of the planned `BadRequestException` (rule: services never throw Nest HTTP exceptions).
 
 ### SI-03.8 — Endpoint POST /videos/:id/upload/complete (Finalize Upload and Enqueue Processing)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 37 passing in src/videos (incl. full init→PUT→complete→job integration) + 5 E2E (test/videos-upload-complete.e2e-spec.ts); create/parts E2E re-run green (11)
+- **Observations:**
+  - Parts-count / duplicate-part checks use `InvalidUploadRequestException` (`VALIDATION_ERROR`) instead of the planned `BadRequestException`.
+  - The 413 E2E boots a second app with `MAX_UPLOAD_BYTES=1024` and restores the env afterwards.
 
 ### SI-03.9 — FFmpeg Media Service (Typed spawn Wrapper)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 17 passing (process-runner.spec, ffmpeg.service.spec, ffmpeg.service.integration-spec with real ffmpeg 5.1.9)
+- **Observations:**
+  - `runProcess` was implemented as an injectable `ProcessRunner` class (same behavior) so `FfmpegService` can be unit-tested with a mocked runner.
+  - Fixtures committed: `test/fixtures/sample.mp4` (32 KB, 2 s, 320×240 H.264/AAC, generated with lavfi testsrc+sine) and `test/fixtures/not-a-video.mp4` (plain text).
 
 ### SI-03.10 — Video Worker Entrypoint and process-video Processor
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 7 passing (worker.module.spec, video-processing.processor.spec, video-processing.processor.integration-spec with real DB + SeaweedFS + ffmpeg)
+- **Observations:**
+  - Per layer-separation rules the processing steps live in `VideoProcessingService`; `VideoProcessingProcessor` only delegates and handles the BullMQ `failed` event (logs instead of rethrowing — background context).
+  - `markProcessingFailed` never overwrites an existing `failed` row, so `NO_VIDEO_STREAM` (UnrecoverableError) is kept.
+  - `video-worker` Compose service verified running with no published ports and the "Video worker started (no HTTP server)" log. The end-to-end API → queue → real worker run was not exercised manually; the processing path is covered by the processor integration test.
+  - Whether ffprobe returns "no video stream" or exits non-zero for the text fixture is environment-dependent; the integration test accepts both outcomes (NO_VIDEO_STREAM without retry, or MediaProcessError → retried → PROCESSING_ERROR).
 
 ### SI-03.11 — Endpoint GET /videos/:id (Video Metadata by Unique URL)
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 2 unit (videos.service.spec) + 4 E2E (test/videos-get.e2e-spec.ts)
+- **Observations:**
+  - Added `seedVideo` to the shared E2E helper for read-side scenarios (rows inserted directly, as the spec Setup describes).
 
 ### SI-03.12 — Endpoints GET /videos/:id/stream and GET /videos/:id/download
-- **Status:** pending
-- **Tests:** —
+- **Status:** completed
+- **Tests:** 6 unit (videos.service.spec) + 5 E2E (test/videos-stream-download.e2e-spec.ts: Range 206 `video/mp4`, attachment disposition, byte-identical download)
 - **Observations:** none
 
 ### SI-03.13 — Abandoned Upload Reconciliation Job
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 3 integration (stale-upload-reconciliation.service, real DB + SeaweedFS) + worker.module compile re-run
+- **Observations:**
+  - Scheduler is registered in `StaleUploadReconciliationProcessor.onApplicationBootstrap` via `upsertJobScheduler`; verified on the real `video-worker`: after two restarts Redis holds exactly one `reconcile-stale-uploads` scheduler.
 
 ### SI-03.14 — OpenAPI Contract Export and HTTP Examples for Videos
-- **Status:** pending
-- **Tests:** —
-- **Observations:** none
+- **Status:** completed
+- **Tests:** 7 passing (test/swagger.e2e-spec.ts, incl. new video-operations/security assertion)
+- **Observations:**
+  - `openapi.json` regenerated (+619 lines, six `/videos` operations with per-status responses); a second `npm run openapi:export` produces an identical file.
+  - The frontend's committed `types.gen.ts` sync/CI freshness check (next-frontend-openapi-typing TD-02/TD-03) is a next-frontend concern and was not run here.
 
 ## Pre-phase baseline (2026-11-03)
 

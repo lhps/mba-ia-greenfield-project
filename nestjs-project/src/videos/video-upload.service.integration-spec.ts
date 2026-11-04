@@ -5,7 +5,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { VerificationToken } from '../auth/entities/verification-token.entity';
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
+import type { Queue } from 'bullmq';
+import { presignedRequest } from '../test/presigned-request';
 import { ChannelsModule } from '../channels/channels.module';
+import queueConfig from '../config/queue.config';
+import { QueueModule } from '../queue/queue.module';
+import { QUEUES } from '../queue/queue.constants';
+import { VideoProcessingQueue } from './video-processing.queue';
 import { Channel } from '../channels/entities/channel.entity';
 import storageConfig from '../config/storage.config';
 import uploadConfig from '../config/upload.config';
@@ -14,6 +21,7 @@ import { StorageModule } from '../storage/storage.module';
 import { cleanAllTables } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { Video } from './entities/video.entity';
+import { VideoAccessService } from './video-access.service';
 import { VideoUploadService } from './video-upload.service';
 
 describe('VideoUploadService (integration)', () => {
@@ -27,9 +35,15 @@ describe('VideoUploadService (integration)', () => {
 
   beforeAll(async () => {
     process.env.S3_BUCKET = `${originalBucket}-test`;
+    process.env.QUEUE_PREFIX = 'bull-test';
     module = await Test.createTestingModule({
       imports: [
-        ConfigModule.forRoot({ isGlobal: true, load: [storageConfig, uploadConfig] }),
+        ConfigModule.forRoot({
+          isGlobal: true,
+          load: [storageConfig, uploadConfig, queueConfig],
+        }),
+        QueueModule,
+        BullModule.registerQueue({ name: QUEUES.VIDEO_PROCESSING }),
         TypeOrmModule.forRoot({
           type: 'postgres',
           host: process.env.DB_HOST,
@@ -44,7 +58,7 @@ describe('VideoUploadService (integration)', () => {
         ChannelsModule,
         StorageModule,
       ],
-      providers: [VideoUploadService],
+      providers: [VideoUploadService, VideoAccessService, VideoProcessingQueue],
     }).compile();
     service = module.get(VideoUploadService);
     dataSource = module.get(DataSource);
@@ -90,5 +104,38 @@ describe('VideoUploadService (integration)', () => {
       new ListMultipartUploadsCommand({ Bucket: process.env.S3_BUCKET }),
     );
     expect(Uploads?.some((u) => u.UploadId === video.upload_id)).toBe(true);
+  });
+
+  it('should complete an uploaded video, clear upload_id and enqueue processing', async () => {
+    const queue = module.get<Queue>(getQueueToken(QUEUES.VIDEO_PROCESSING));
+    await queue.obliterate({ force: true });
+    const started = await service.initiate(userId, {
+      file_name: 'clip.mp4',
+      file_size: 1024,
+      content_type: 'video/mp4',
+    });
+    const { parts } = await service.presignParts(
+      userId,
+      started.public_id,
+      [1],
+    );
+    const put = await presignedRequest(parts[0].url, {
+      method: 'PUT',
+      body: Buffer.alloc(1024, 7),
+    });
+
+    const result = await service.complete(userId, started.public_id, [
+      { part_number: 1, etag: put.headers.etag as string },
+    ]);
+
+    expect(result.processing_status).toBe('processing');
+    const video = await dataSource
+      .getRepository(Video)
+      .findOneByOrFail({ public_id: started.public_id });
+    expect(video.processing_status).toBe('processing');
+    expect(video.upload_id).toBeNull();
+    const job = await queue.getJob(video.id);
+    expect(job?.data).toEqual({ video_id: video.id });
+    await queue.obliterate({ force: true });
   });
 });

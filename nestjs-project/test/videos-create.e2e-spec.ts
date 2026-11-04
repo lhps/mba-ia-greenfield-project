@@ -60,12 +60,10 @@ describe('videos-create', () => {
       part_count: 3,
     });
 
-    const video = await ctx.dataSource
-      .getRepository(Video)
-      .findOneOrFail({
-        where: { public_id: res.body.public_id },
-        relations: { channel: { user: true } },
-      });
+    const video = await ctx.dataSource.getRepository(Video).findOneOrFail({
+      where: { public_id: res.body.public_id },
+      relations: { channel: { user: true } },
+    });
     expect(video.channel.user.email).toBe('video_a@example.com');
     expect(video.file_size).toBe(157286400);
     expect(video.content_type).toBe('video/mp4');
@@ -76,7 +74,9 @@ describe('videos-create', () => {
     );
     expect(
       Uploads?.some(
-        (u) => u.Key === `videos/${video.id}/original` && u.UploadId === video.upload_id,
+        (u) =>
+          u.Key === `videos/${video.id}/original` &&
+          u.UploadId === video.upload_id,
       ),
     ).toBe(true);
   });
