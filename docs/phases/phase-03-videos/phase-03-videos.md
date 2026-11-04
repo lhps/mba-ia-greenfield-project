@@ -22,28 +22,35 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 
 ## Step Implementations
 
-### SI-03.1 — Infra: Dependencies, FFmpeg Image, MinIO and Redis Services
+### SI-03.1 — Infra: Dependencies, FFmpeg Image, SeaweedFS and Redis Services
 
-**Description:** Install the Phase 03 libraries, add FFmpeg to the dev image, and add the object storage and queue backing services to Docker Compose, including bucket bootstrap with the multipart-abort lifecycle rule and browser CORS required by direct uploads.
+**Description:** Install the Phase 03 libraries, add FFmpeg to the dev image, and add the object storage and queue backing services to Docker Compose, including an idempotent bucket bootstrap (via the S3 API) with the multipart-abort lifecycle rule and the browser CORS required by direct uploads.
+
+_Revised 2026-11-03 during /implement: MinIO images are no longer pullable — storage service switched to SeaweedFS per `phase-03-videos/TD-12` (supersedes TD-01); `mc`-based bootstrap replaced by an S3-API bootstrap script._
 
 **Technical actions:**
 
-1. Install production dependencies in `nestjs-project` (inside the container): `@aws-sdk/client-s3@^3.1161.0`, `@aws-sdk/s3-request-presigner@^3.1161.0` (per `phase-03-videos/TD-01`), `@nestjs/bullmq@^12.0.0`, `bullmq@^6.5.4` (per `phase-03-videos/TD-02`)
+1. Install production dependencies in `nestjs-project` (inside the container): `@aws-sdk/client-s3@^3.1161.0`, `@aws-sdk/s3-request-presigner@^3.1161.0` (per `phase-03-videos/TD-12`), `@nestjs/bullmq@^11.0.5` (v12 is ESM-only — see library-refs), `bullmq@^6.5.4`, `ioredis@^5` (required peer of bullmq 6) (per `phase-03-videos/TD-02`)
 2. Update `nestjs-project/Dockerfile.dev` — add `ffmpeg` to the `apt install` line so `ffmpeg`/`ffprobe` exist in the image used by API tests and the worker (per `phase-03-videos/TD-07`, `phase-03-videos/TD-11`)
-3. Add `minio` service to `nestjs-project/compose.yaml` — `minio/minio` pinned to the last community `RELEASE.*` tag, `server /data --console-address :9001`, ports `9000`/`9001`, named volume, `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` from env, `MINIO_API_CORS_ALLOW_ORIGIN` set to the frontend origin, healthcheck on `/minio/health/live` (per `phase-03-videos/TD-01`)
-4. Add `minio-init` one-shot service (`minio/mc`, `depends_on: minio: service_healthy`) — creates the `S3_BUCKET` bucket and the test bucket (`<S3_BUCKET>-test`) idempotently (`mc mb --ignore-existing`) and applies the lifecycle rule `AbortIncompleteMultipartUpload` with `DaysAfterInitiation: 2` via `mc ilm rule add --expire-delete-marker` / `mc ilm import` (per `phase-03-videos/TD-10`)
-5. Add `redis` service (`redis:7-alpine`, port `6379`, healthcheck `redis-cli ping`) and make `nestjs-api` depend on `minio` (healthy), `minio-init` (completed successfully) and `redis` (healthy) (per `phase-03-videos/TD-02`)
+3. Add `seaweedfs` service to `nestjs-project/compose.yaml` — `chrislusf/seaweedfs:4.51`, `server -s3 -s3.config=/etc/seaweedfs/s3.json` where the identities JSON is generated at container start from `S3_ACCESS_KEY`/`S3_SECRET_KEY` (single admin identity), host port `8333` (S3 only), named volume on `/data`, healthcheck `wget -qO- http://localhost:8333/healthz` (per `phase-03-videos/TD-12`)
+4. Create `src/storage/bucket-bootstrap.ts` — `bootstrapBucket(client, { bucket, corsAllowedOrigins, abortIncompleteDays })`: `CreateBucket` (ignoring `BucketAlreadyOwnedByYou`/`BucketAlreadyExists`), `PutBucketCors` (`AllowedMethods: GET, PUT, HEAD`, `AllowedHeaders: *`, `ExposeHeaders: ETag`), `PutBucketLifecycleConfiguration` (`AbortIncompleteMultipartUpload.DaysAfterInitiation = 2`); plus CLI `src/storage/bootstrap-buckets.cli.ts` (reads `S3_*` + `S3_CORS_ALLOWED_ORIGINS` from env via `dotenv/config`, bootstraps `S3_BUCKET` and `<S3_BUCKET>-test`) exposed as `npm run storage:bootstrap` (per `phase-03-videos/TD-12`, `phase-03-videos/TD-10`, `library-refs.md` → `@aws-sdk/client-s3` bucket bootstrap)
+5. Add `redis` (`redis:7-alpine`, port `6379`, healthcheck `redis-cli ping`) and one-shot `storage-init` (same build/volume as `nestjs-api`, `command: npm run storage:bootstrap`, `depends_on: seaweedfs: service_healthy`) services; make `nestjs-api` depend on `seaweedfs` (healthy), `storage-init` (completed successfully) and `redis` (healthy) (per `phase-03-videos/TD-02`)
 
-**Tests:** _(empty — Infra)_
+**Tests:**
+
+| Artifact | Layer | Test file |
+|----------|-------|-----------|
+| `bootstrapBucket` | Integration (real Compose SeaweedFS, throwaway bucket): creates bucket; CORS rule exposes `ETag` for the configured origin; lifecycle rule has `AbortIncompleteMultipartUpload` of 2 days; second run is a no-op without errors | `src/storage/bucket-bootstrap.integration-spec.ts` |
 
 **Dependencies:** none
 
 **Acceptance criteria:**
 
-- `docker compose ps` shows `minio` and `redis` running and healthy; `minio-init` exited with code 0
+- `docker compose ps` shows `seaweedfs` and `redis` running and healthy; `storage-init` exited with code 0
 - `docker compose exec nestjs-api ffmpeg -version` and `ffprobe -version` print version info
-- `mc ilm rule ls` on the bucket lists an `AbortIncompleteMultipartUpload` rule of 2 days
-- A browser-origin `OPTIONS` preflight to `http://localhost:9000/<bucket>/<key>` from the configured frontend origin returns `Access-Control-Allow-Origin` and exposes the `ETag` header
+- After `storage-init`, `GetBucketLifecycleConfiguration` on `S3_BUCKET` returns an `AbortIncompleteMultipartUpload` rule of 2 days
+- A browser-origin `OPTIONS` preflight to `http://localhost:8333/<bucket>/<key>` from the configured frontend origin returns `Access-Control-Allow-Origin` and the actual response exposes the `ETag` header
+- Re-running `npm run storage:bootstrap` exits 0 without changing bucket state
 - Existing test suites still pass after the image rebuild
 
 ---
@@ -54,11 +61,11 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 
 **Technical actions:**
 
-1. Create `src/config/storage.config.ts` — `registerAs('storage', ...)` reading `S3_ENDPOINT` (internal, Compose service name: `http://minio:9000`), `S3_PUBLIC_ENDPOINT` (host-reachable, used only for presigning: `http://localhost:9000`), `S3_REGION` (default `'us-east-1'`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET` (per `phase-03-videos/TD-01`, `phase-03-videos/TD-04`; inherited `phase-01-configuracao-base/TD-03`)
+1. Create `src/config/storage.config.ts` — `registerAs('storage', ...)` reading `S3_ENDPOINT` (internal, Compose service name: `http://seaweedfs:8333`), `S3_PUBLIC_ENDPOINT` (host-reachable, used only for presigning: `http://localhost:8333`), `S3_REGION` (default `'us-east-1'`), `S3_ACCESS_KEY`, `S3_SECRET_KEY`, `S3_BUCKET`, `S3_CORS_ALLOWED_ORIGINS` (comma-separated, default `'http://localhost:3001'`) (per `phase-03-videos/TD-12`, `phase-03-videos/TD-04`; inherited `phase-01-configuracao-base/TD-03`)
 2. Create `src/config/queue.config.ts` — `registerAs('queue', ...)` reading `REDIS_HOST` (default `'redis'`), `REDIS_PORT` (default `6379`) (per `phase-03-videos/TD-02`)
 3. Create `src/config/upload.config.ts` — `registerAs('upload', ...)` reading `MAX_UPLOAD_BYTES` (default `10737418240`), `UPLOAD_PART_SIZE_BYTES` (default `67108864`, min 5 MiB), `PRESIGNED_URL_TTL_SECONDS` (default `3600`), `STALE_UPLOAD_HOURS` (default `48`) (per `phase-03-videos/TD-09`, `phase-03-videos/TD-10`)
 4. Update `src/config/env.validation.ts` — add the new keys to the Joi schema (`S3_*` credentials and endpoints required, numeric keys with defaults and `UPLOAD_PART_SIZE_BYTES ≥ 5242880`); add the three factories to `ConfigModule.forRoot({ load })` in `AppModule`
-5. Update `.env.example` with all new variables using Compose service names for container-to-container hosts (`S3_ENDPOINT=http://minio:9000`, `REDIS_HOST=redis`) and `S3_PUBLIC_ENDPOINT=http://localhost:9000` for browser-facing signing; add `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` matching `S3_ACCESS_KEY`/`S3_SECRET_KEY`
+5. Update `.env.example` with all new variables using Compose service names for container-to-container hosts (`S3_ENDPOINT=http://seaweedfs:8333`, `REDIS_HOST=redis`) and `S3_PUBLIC_ENDPOINT=http://localhost:8333` for browser-facing signing; `S3_ACCESS_KEY`/`S3_SECRET_KEY` also feed the SeaweedFS identities JSON generated in Compose
 
 **Tests:**
 
@@ -83,7 +90,7 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 
 **Technical actions:**
 
-1. Create `src/storage/storage.module.ts` — provides two `S3Client` instances built from `storageConfig` (`forcePathStyle: true`): `internal` (endpoint `S3_ENDPOINT`, used for every server-side call) and `public` (endpoint `S3_PUBLIC_ENDPOINT`, used only by `getSignedUrl`); exports `StorageService` (per `phase-03-videos/TD-01`, `library-refs.md` → `@aws-sdk/client-s3`)
+1. Create `src/storage/storage.module.ts` — provides two `S3Client` instances built from `storageConfig` (`forcePathStyle: true`, `requestChecksumCalculation: 'WHEN_REQUIRED'`, `responseChecksumValidation: 'WHEN_REQUIRED'`): `internal` (endpoint `S3_ENDPOINT`, used for every server-side call) and `public` (endpoint `S3_PUBLIC_ENDPOINT`, used only by `getSignedUrl`); exports `StorageService` (per `phase-03-videos/TD-12`, `phase-03-videos/TD-04` revision, `library-refs.md` → `@aws-sdk/client-s3`)
 2. Create `src/storage/storage.service.ts` — multipart methods: `createMultipartUpload(key, contentType)` → `UploadId`; `presignUploadPart(key, uploadId, partNumber)` → url; `completeMultipartUpload(key, uploadId, parts)` translating `InvalidPart`/`InvalidPartOrder`/`NoSuchUpload` into a typed `MultipartCompletionError`; `abortMultipartUpload(key, uploadId)` ignoring `NoSuchUpload` (per `phase-03-videos/TD-04`, `phase-03-videos/TD-10`)
 3. Add object methods to `StorageService`: `headObject(key)` → `{ contentLength }`, `presignGetObject(key, { downloadFileName? })` setting `ResponseContentDisposition: attachment; filename="..."` when given, `downloadToFile(key, path)` (streams `GetObject` body to disk), `uploadFile(path, key, contentType)`, `deleteObject(key)`; all presigns use `PRESIGNED_URL_TTL_SECONDS` and return `{ url, expiresAt }` (per `phase-03-videos/TD-08`, `phase-03-videos/TD-09`, `library-refs.md` → `@aws-sdk/s3-request-presigner`)
 
@@ -92,7 +99,7 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
 | `StorageModule` | Unit: compilation test (module resolves with test config) | `src/storage/storage.module.spec.ts` |
-| `StorageService` | Integration (real Compose MinIO, test bucket): create multipart → presign part → `PUT` via `fetch` → complete with ETag → `headObject` size; invalid ETag → `MultipartCompletionError`; abort; presigned GET honors `Range` (206) and download disposition header; signed URL host is `S3_PUBLIC_ENDPOINT` | `src/storage/storage.service.integration-spec.ts` |
+| `StorageService` | Integration (real Compose SeaweedFS, test bucket): create multipart → presign part → `PUT` via `fetch` (no checksum query params in the URL) → complete with ETag → `headObject` size; invalid ETag → `MultipartCompletionError`; abort; presigned GET honors `Range` (206) and download disposition header; signed URL host is `S3_PUBLIC_ENDPOINT` | `src/storage/storage.service.integration-spec.ts` |
 
 **Dependencies:** SI-03.2 — `storageConfig` must exist
 
@@ -187,7 +194,7 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
 | `VideoUploadService` | Unit (mocked repo/storage): `part_count` math incl. exact multiple and last partial part; `public_id` collision retry then success; retries exhausted → error; insert failure → `abortMultipartUpload` called | `src/videos/video-upload.service.spec.ts` |
-| `VideoUploadService` | Integration (real DB + MinIO): `initiate` persists draft row with `upload_id` and a live multipart upload exists for `original_key` | `src/videos/video-upload.service.integration-spec.ts` |
+| `VideoUploadService` | Integration (real DB + SeaweedFS): `initiate` persists draft row with `upload_id` and a live multipart upload exists for `original_key` | `src/videos/video-upload.service.integration-spec.ts` |
 
 **Dependencies:** SI-03.3 — `StorageService`; SI-03.4 — `Video` entity and `public_id` util
 
@@ -258,7 +265,7 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
 | `VideoUploadService.complete` | Unit (mocked storage/queue/repo): parts count mismatch → 400; storage rejection → `UPLOAD_PARTS_INVALID` and no state change; oversize → object deleted, `failed`/`FILE_TOO_LARGE`, 413, no enqueue; success → `processing` + enqueue called once | `src/videos/video-upload.service.spec.ts` |
-| `VideoUploadService.complete` | Integration (real DB + MinIO + Redis): full init → presigned part PUTs → complete → row `processing`, `upload_id` null, object exists, `process-video` job present | `src/videos/video-upload.service.integration-spec.ts` |
+| `VideoUploadService.complete` | Integration (real DB + SeaweedFS + Redis): full init → presigned part PUTs → complete → row `processing`, `upload_id` null, object exists, `process-video` job present | `src/videos/video-upload.service.integration-spec.ts` |
 
 **Dependencies:** SI-03.5 — `VideoProcessingQueue`; SI-03.7 — access checks and exceptions
 
@@ -314,14 +321,14 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 2. Create `src/videos/processing/video-processing.processor.ts` — `@Processor(VIDEO_PROCESSING_QUEUE, { concurrency: 1 }) extends WorkerHost`; `process(job)` loads the video by `job.data.video_id` (skip when already `ready`), runs the steps of `### Events/Messages → process-video` in a per-job temp dir (download original → probe → no video stream: set `failed`/`NO_VIDEO_STREAM` and throw `UnrecoverableError` → faststart/transcode → upload `video.mp4` → thumbnail at 10% of duration → upload `thumbnail.jpg` → persist metadata + keys + `ready` → delete original), always removing the temp dir (per `phase-03-videos/TD-07`, `phase-03-videos/TD-08`, `library-refs.md` → `@nestjs/bullmq`)
 3. Add failure handling to the processor — in `onApplicationBootstrap`, `this.worker.on('failed', ...)`: when `job.attemptsMade >= job.opts.attempts` and the video is not already `failed`, set `processing_status = 'failed'`, `failure_reason = 'PROCESSING_ERROR'` (per `phase-03-videos/TD-02`, `phase-03-videos/TD-05`)
 4. Add npm scripts `start:worker:dev` (`nest start --watch --entryFile worker`) and `start:worker:prod` (`node dist/worker`); ensure `WorkerModule` is never imported by `AppModule`
-5. Add `video-worker` service to `nestjs-project/compose.yaml` — same build/volume as `nestjs-api`, `command: npm run start:worker:dev`, `depends_on` `db` (healthy), `redis` (healthy), `minio` (healthy), no published ports (per `phase-03-videos/TD-03`)
+5. Add `video-worker` service to `nestjs-project/compose.yaml` — same build/volume as `nestjs-api`, `command: npm run start:worker:dev`, `depends_on` `db` (healthy), `redis` (healthy), `seaweedfs` (healthy), no published ports (per `phase-03-videos/TD-03`)
 
 **Tests:**
 
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
 | `WorkerModule` | Unit: compilation test (resolves without `AppModule`/HTTP) | `src/worker.module.spec.ts` |
-| `VideoProcessingProcessor` | Integration (real DB + MinIO + ffmpeg, fixture uploaded as original): job → row `ready` with duration/size/codecs, `video.mp4` and `thumbnail.jpg` exist, original deleted; `not-a-video.mp4` → `failed`/`NO_VIDEO_STREAM`; re-running a `ready` video is a no-op | `src/videos/processing/video-processing.processor.integration-spec.ts` |
+| `VideoProcessingProcessor` | Integration (real DB + SeaweedFS + ffmpeg, fixture uploaded as original): job → row `ready` with duration/size/codecs, `video.mp4` and `thumbnail.jpg` exist, original deleted; `not-a-video.mp4` → `failed`/`NO_VIDEO_STREAM`; re-running a `ready` video is a no-op | `src/videos/processing/video-processing.processor.integration-spec.ts` |
 | `VideoProcessingProcessor` failed handler | Unit: last attempt → `failed`/`PROCESSING_ERROR`; earlier attempts → status untouched | `src/videos/processing/video-processing.processor.spec.ts` |
 
 **Dependencies:** SI-03.3 — storage; SI-03.4 — entity; SI-03.5 — queue; SI-03.9 — `FfmpegService`
@@ -414,7 +421,7 @@ Deliver the video upload and processing backbone — S3-compatible file storage 
 
 | Artifact | Layer | Test file |
 |----------|-------|-----------|
-| `StaleUploadReconciliationService` | Integration (real DB + MinIO): stale `uploading` row with live multipart → aborted and `failed`/`UPLOAD_ABANDONED`; fresh `uploading` row and `processing`/`ready` rows untouched; already-aborted upload does not throw | `src/videos/processing/stale-upload-reconciliation.service.integration-spec.ts` |
+| `StaleUploadReconciliationService` | Integration (real DB + SeaweedFS): stale `uploading` row with live multipart → aborted and `failed`/`UPLOAD_ABANDONED`; fresh `uploading` row and `processing`/`ready` rows untouched; already-aborted upload does not throw | `src/videos/processing/stale-upload-reconciliation.service.integration-spec.ts` |
 
 **Dependencies:** SI-03.10 — `WorkerModule`; SI-03.3 — `abortMultipartUpload`
 
@@ -697,7 +704,7 @@ Error response format inherited from phase-02-auth/TD-07: `{ statusCode, error, 
 ## Dependency Map
 
 ```
-SI-03.1 (root — deps, ffmpeg image, MinIO, Redis)
+SI-03.1 (root — deps, ffmpeg image, SeaweedFS, Redis)
 ├── SI-03.2 — depends on SI-03.1 (env keys and services must exist to boot)
 │   ├── SI-03.3 — depends on SI-03.2 (storageConfig)
 │   └── SI-03.5 — depends on SI-03.2 + SI-03.4 (queueConfig; producer lives in VideosModule)
@@ -717,7 +724,7 @@ SI-03.14 — depends on SI-03.8 + SI-03.12 (all endpoints implemented before exp
 
 ## Deliverables
 
-- [ ] SI-03.1 — Infra: Dependencies, FFmpeg Image, MinIO and Redis Services
+- [ ] SI-03.1 — Infra: Dependencies, FFmpeg Image, SeaweedFS and Redis Services
 - [ ] SI-03.2 — Configuration Namespaces for Storage, Queue and Upload
 - [ ] SI-03.3 — Storage Module (S3 API Adapter)
 - [ ] SI-03.4 — Video Entity, Public ID Generator and Migration

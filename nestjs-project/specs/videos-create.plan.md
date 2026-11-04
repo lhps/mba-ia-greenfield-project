@@ -10,7 +10,7 @@ target_file: test/videos-create.e2e-spec.ts
 
 ## Application Overview
 
-`POST /videos` inicia o upload de um vídeo: pré-cadastra o vídeo como rascunho (`processing_status: "uploading"`, `publication_status: "draft"`) no canal do usuário autenticado e abre um multipart upload no storage S3-compatível (MinIO). A resposta devolve o `public_id` (11 chars, URL única) e o plano de partes (`part_size`, `part_count`) que o cliente usa para enviar os bytes direto ao storage — a API nunca recebe os bytes do vídeo. Campos do wire em snake_case; `file_size` limitado por `MAX_UPLOAD_BYTES` (10 GiB) e `content_type` restrito à allowlist de MIME de vídeo.
+`POST /videos` inicia o upload de um vídeo: pré-cadastra o vídeo como rascunho (`processing_status: "uploading"`, `publication_status: "draft"`) no canal do usuário autenticado e abre um multipart upload no storage S3-compatível (SeaweedFS). A resposta devolve o `public_id` (11 chars, URL única) e o plano de partes (`part_size`, `part_count`) que o cliente usa para enviar os bytes direto ao storage — a API nunca recebe os bytes do vídeo. Campos do wire em snake_case; `file_size` limitado por `MAX_UPLOAD_BYTES` (10 GiB) e `content_type` restrito à allowlist de MIME de vídeo.
 
 ## Test Scenarios
 

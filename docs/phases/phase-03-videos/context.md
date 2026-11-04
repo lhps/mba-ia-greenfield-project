@@ -3,7 +3,7 @@ kind: phase
 name: phase-03-videos
 sources_mtime:
   docs/project-plan.md: "2026-10-21T16:43:34-03:00"
-  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-03T19:01:23-03:00"
+  docs/decisions/technical-decisions-phase-03-videos.md: "2026-11-03T21:41:19-03:00"
   docs/decisions/technical-decisions-openapi-docs-nestjs.md: "2026-10-21T16:43:34-03:00"
   docs/decisions/technical-decisions-next-frontend-openapi-typing.md: "2026-10-21T16:43:34-03:00"
   docs/decisions/technical-decisions-next-frontend-config-base.md: "2026-10-21T16:43:34-03:00"
@@ -47,11 +47,11 @@ sources_mtime:
 
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
-| phase-03-videos/TD-01 | phase | Repo-wide | Object Storage Backend (S3-compatible service) | decided | A | @aws-sdk/client-s3, @aws-sdk/s3-request-presigner |
+| phase-03-videos/TD-01 | phase | Repo-wide | Object Storage Backend (S3-compatible service) | superseded-by phase-03-videos/TD-12 | — | — |
 | phase-03-videos/TD-02 | phase | Backend | Background Job Queue | decided | A | @nestjs/bullmq, bullmq |
 | phase-03-videos/TD-03 | phase | Repo-wide | Video Worker Deployment Model | decided | A | — |
 | phase-03-videos/TD-04 | phase | Cross-layer | Large-file Upload Protocol (up to 10GB) | decided | A | — |
-|     └─ Last revision: 2026-11-03 — Acceptance criterion for "sem impacto na performance" fixed: uploa… | | | | | | |
+|     └─ Last revision: 2026-11-03 — The `S3Client` must be built with `requestChecksumCalculation: 'WH… | | | | | | |
 | phase-03-videos/TD-05 | phase | Cross-layer | Video Lifecycle / Status Model | decided | A | — |
 | phase-03-videos/TD-06 | phase | Cross-layer | Unique Public Video ID (URL identifier) | decided | B | — |
 | phase-03-videos/TD-07 | phase | Backend | FFmpeg Integration Approach | decided | A | — |
@@ -61,6 +61,7 @@ sources_mtime:
 |     └─ Last revision: 2026-11-03 — Wire field names follow the existing snake_case API convention (`r… | | | | | | |
 | phase-03-videos/TD-10 | phase | Backend | Abandoned Upload Cleanup | decided | A | — |
 | phase-03-videos/TD-11 | phase | Backend | Integration/E2E Test Strategy for Storage, Queue and FFmpeg | decided | A | — |
+| phase-03-videos/TD-12 | phase | Repo-wide | Object Storage Backend — replacement for unavailable MinIO images | decided | A | @aws-sdk/client-s3, @aws-sdk/s3-request-presigner |
 
 _Source files:_
 
@@ -70,7 +71,7 @@ _Source files:_
 
 | Capability (from project-plan.md) | Covered by |
 |-----------------------------------|------------|
-| Serviço de armazenamento de arquivos (vídeos e thumbnails) | phase-03-videos/TD-01, phase-03-videos/TD-11 |
+| Serviço de armazenamento de arquivos (vídeos e thumbnails) | phase-03-videos/TD-12, phase-03-videos/TD-11 |
 | Serviço de processamento em segundo plano (filas) | phase-03-videos/TD-02, phase-03-videos/TD-03, phase-03-videos/TD-11 |
 | Upload de vídeos com suporte a arquivos de até 10GB sem impacto na performance | phase-03-videos/TD-04, phase-03-videos/TD-09 |
 | Pré-cadastro automático do vídeo como rascunho ao iniciar o upload | phase-03-videos/TD-05, phase-03-videos/TD-10 |
@@ -81,11 +82,6 @@ _Source files:_
 | Download do vídeo pelo usuário | phase-03-videos/TD-08 |
 
 ## Decisions Detail
-
-### phase-03-videos/TD-01
-
-**Recommendation:** MinIO pinned to the last community image; code talks only S3 API — the code is coupled only to the S3 API, so the frozen-upstream risk is confined to the dev/test container; MinIO is the only option that supports every S3 feature this phase relies on (browser presigned multipart, CORS, lifecycle abort rule) with zero bootstrap friction. Revisit (Option B) if the project ever targets a self-hosted production storage.
-**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ### phase-03-videos/TD-02
 
@@ -103,6 +99,7 @@ _Source files:_
 **Libraries:** —
 **Revisions:**
 - 2026-11-03 — Acceptance criterion for "sem impacto na performance" fixed: upload bytes travel browser → storage only (the API and BFF handle just the JSON handshake), so API memory is independent of file size. Rationale: AMB-1 resolved in /plan-resolve 03 — capability wording had no verifiable criterion.
+- 2026-11-03 — The `S3Client` must be built with `requestChecksumCalculation: 'WHEN_REQUIRED'` and `responseChecksumValidation: 'WHEN_REQUIRED'`: with the SDK default (`WHEN_SUPPORTED`, since v3.729) presigned `UploadPart` URLs carry `x-amz-checksum-crc32` and a browser `PUT` of the part is rejected with `400 BadDigest`. Rationale: reproduced against SeaweedFS 4.51 and RustFS 1.0.4 during the TD-12 spike (/implement 03, SI-03.1).
 
 ### phase-03-videos/TD-05
 
@@ -143,6 +140,11 @@ _Source files:_
 
 **Recommendation:** Real Compose services + tiny fixture video — mirrors the established real-DB testing convention and exercises exactly the integration seams this phase introduces; the only cost is installing ffmpeg in the dev image.
 **Libraries:** —
+
+### phase-03-videos/TD-12
+
+**Recommendation:** SeaweedFS `chrislusf/seaweedfs:4.51`; bucket, CORS and lifecycle bootstrapped through the S3 API — passed every check this phase relies on, needs no server-wide CORS flag, and was already the documented fallback in TD-01. Both A and B require the SDK checksum setting recorded in TD-04's revision; that requirement is server-independent.
+**Libraries:** @aws-sdk/client-s3, @aws-sdk/s3-request-presigner
 
 ## Inherited Decisions Detail
 

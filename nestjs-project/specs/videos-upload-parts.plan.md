@@ -38,7 +38,7 @@ target_file: test/videos-upload-parts.e2e-spec.ts
 **Last sync:** 2026-11-03T22:17:02Z
 
 **Steps:**
-  1. Obter URL da parte 1 como em 1.1; reescrever o host público para o endpoint interno do MinIO apenas no cliente de teste (o processo de teste roda dentro do container)
+  1. Obter URL da parte 1 como em 1.1; reescrever o host público para o endpoint interno do SeaweedFS apenas no cliente de teste (o processo de teste roda dentro do container)
   2. `PUT` de um buffer de 5 MiB na URL
     - expect: status `200`
     - expect: resposta contém header `ETag` não vazio

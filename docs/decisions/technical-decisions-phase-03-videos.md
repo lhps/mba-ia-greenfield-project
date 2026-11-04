@@ -16,6 +16,7 @@ _Subprojects in scope:_
 ---
 
 ## TD-01: Object Storage Backend (S3-compatible service)
+<!-- status: superseded-by: phase-03-videos/TD-12 -->
 
 **Scope:** Repo-wide
 
@@ -146,6 +147,7 @@ _Subprojects in scope:_
 
 **Revisions:**
 - 2026-11-03 — Acceptance criterion for "sem impacto na performance" fixed: upload bytes travel browser → storage only (the API and BFF handle just the JSON handshake), so API memory is independent of file size. Rationale: AMB-1 resolved in /plan-resolve 03 — capability wording had no verifiable criterion.
+- 2026-11-03 — The `S3Client` must be built with `requestChecksumCalculation: 'WHEN_REQUIRED'` and `responseChecksumValidation: 'WHEN_REQUIRED'`: with the SDK default (`WHEN_SUPPORTED`, since v3.729) presigned `UploadPart` URLs carry `x-amz-checksum-crc32` and a browser `PUT` of the part is rejected with `400 BadDigest`. Rationale: reproduced against SeaweedFS 4.51 and RustFS 1.0.4 during the TD-12 spike (/implement 03, SI-03.1).
 
 ---
 
@@ -373,11 +375,41 @@ _Subprojects in scope:_
 
 ---
 
+## TD-12: Object Storage Backend — replacement for unavailable MinIO images
+
+**Scope:** Repo-wide
+
+**Capability:** Serviço de armazenamento de arquivos (vídeos e thumbnails)
+
+**Context:** TD-01 chose MinIO assuming the old community images stayed pullable. During `/implement 03` (SI-03.1, 2026-11-03) `docker manifest inspect` failed for `minio/minio` (latest and `RELEASE.2025-*` tags), `quay.io/minio/minio`, `minio/mc` and `bitnami/minio` — TD-01 A is infeasible. The code stays coupled only to the S3 API (`@aws-sdk/client-s3` v3), so this TD again picks only the Compose service. Candidates were spiked with the exact SDK version of the plan (3.1161.0): bucket CORS with `ExposeHeaders: ETag` + browser preflight, `AbortIncompleteMultipartUpload` lifecycle, presigned `UploadPart` `PUT`, `CompleteMultipartUpload` with a wrong ETag (must stay resumable), `ListMultipartUploads`, `AbortMultipartUpload`, presigned GET with `Range` (206) and `ResponseContentDisposition`, health endpoint.
+
+**Options:**
+
+### Option A: SeaweedFS `chrislusf/seaweedfs:4.51` (`weed server -s3`)
+- Single container; credentials from an identities JSON (`-s3.config`); S3 on `8333`; health `GET /healthz`.
+- **Pros:** every spike check passed; CORS works from the bucket config alone (`PutBucketCors`); lifecycle `AbortIncompleteMultipartUpload` stored and applied by a scheduled worker; wrong-ETag complete → `InvalidPart` with parts preserved; repeated abort is idempotent; Apache-2.0, actively maintained; was already researched as TD-01 B.
+- **Cons:** weekly releases (pin the tag); credentials file must be generated in Compose; no bucket bootstrap CLI in the image — bucket/CORS/lifecycle must be created via the S3 API.
+
+### Option B: RustFS `rustfs/rustfs:1.0.4`
+- MinIO-like single binary; credentials via `RUSTFS_ACCESS_KEY`/`RUSTFS_SECRET_KEY`; S3 on `9000`; health `GET /health`.
+- **Pros:** every spike check passed; closest to MinIO operationally; built-in stale-multipart cleanup (24h) besides lifecycle rules.
+- **Cons:** newer project; S3-endpoint CORS also needs `RUSTFS_CORS_ALLOWED_ORIGINS`; second abort returns `NoSuchUpload`.
+
+### Option C: Garage
+- Not spiked; TD-01 already noted bootstrap friction (layout assign, key create) and weaker lifecycle/CORS support.
+
+**Recommendation:** Option A — passed every check this phase relies on, needs no server-wide CORS flag, and was already the documented fallback in TD-01. Both A and B require the SDK checksum setting recorded in TD-04's revision; that requirement is server-independent.
+
+**Decision:** A (SeaweedFS `chrislusf/seaweedfs:4.51`; bucket, CORS and lifecycle bootstrapped through the S3 API)
+**Libraries:** `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`
+
+---
+
 ## Decisions Summary
 
 | ID | Scope | Decision | Recommendation | Choice |
 |----|-------|----------|----------------|--------|
-| TD-01 | Repo-wide | Object storage backend (S3-compatible) | A (MinIO pinned last community image, S3 SDK only) | A |
+| TD-01 | Repo-wide | Object storage backend (S3-compatible) | A (MinIO pinned last community image, S3 SDK only) | A — superseded by TD-12 |
 | TD-02 | Backend | Background job queue | A (BullMQ + Redis via `@nestjs/bullmq`) | A |
 | TD-03 | Repo-wide | Video worker deployment model | A (same codebase, separate entrypoint + container) | A |
 | TD-04 | Cross-layer | Large-file upload protocol | A (S3 presigned multipart, browser → storage) | A |
@@ -388,6 +420,7 @@ _Subprojects in scope:_
 | TD-09 | Cross-layer | Upload limits and validation policy | A (declared size/MIME → HeadObject → ffprobe) | A |
 | TD-10 | Backend | Abandoned upload cleanup | A (lifecycle abort rule + repeatable reconciliation job) | A |
 | TD-11 | Backend | Test strategy for storage/queue/FFmpeg | A (real Compose services + tiny fixture video) | A |
+| TD-12 | Repo-wide | Object storage backend — MinIO replacement | A (SeaweedFS 4.51, bootstrap via S3 API) | A |
 
 ---
 

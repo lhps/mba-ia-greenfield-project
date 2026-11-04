@@ -48,3 +48,9 @@ export class TokenReuseDetectedException extends DomainException {
     );
   }
 }
+
+export class InvalidUploadRequestException extends DomainException {
+  constructor(message: string) {
+    super('VALIDATION_ERROR', 400, message);
+  }
+}
