@@ -1,0 +1,23 @@
+import { ConfigModule } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
+import storageConfig from '../config/storage.config';
+import uploadConfig from '../config/upload.config';
+import { StorageModule } from './storage.module';
+import { StorageService } from './storage.service';
+
+describe('StorageModule', () => {
+  it('should compile and provide StorageService', async () => {
+    const module = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          load: [storageConfig, uploadConfig],
+        }),
+        StorageModule,
+      ],
+    }).compile();
+
+    expect(module.get(StorageService)).toBeInstanceOf(StorageService);
+    await module.close();
+  });
+});

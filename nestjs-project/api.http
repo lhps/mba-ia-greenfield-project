@@ -118,3 +118,57 @@ Content-Type: {{contentType}}
   "token": "{{resetToken}}",
   "new_password": "new-password123"
 }
+
+
+###
+# ─────────────────────────────────────────────
+# VÍDEOS — upload direto ao storage (SeaweedFS) + processamento
+# ─────────────────────────────────────────────
+# Usa @accessToken do login acima; após o passo 10, preencha @videoId com o public_id retornado.
+@videoId = cole-o-public-id-aqui
+
+### 10. Iniciar upload (pré-cadastro como rascunho)
+POST {{baseUrl}}/videos
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "file_name": "clip.mp4",
+  "file_size": 32157,
+  "content_type": "video/mp4"
+}
+
+
+### 11. Obter URLs presignadas das partes
+# Faça PUT dos bytes de cada parte na URL retornada e guarde o header ETag:
+#   curl -X PUT --data-binary @test/fixtures/sample.mp4 -D - "<url>"
+POST {{baseUrl}}/videos/{{videoId}}/upload/parts
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "part_numbers": [1]
+}
+
+
+### 12. Concluir upload (enfileira o processamento no video-worker)
+POST {{baseUrl}}/videos/{{videoId}}/upload/complete
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "parts": [{ "part_number": 1, "etag": "\"cole-o-etag-aqui\"" }]
+}
+
+
+### 13. Consultar status/metadados (público) — repita até processing_status = ready
+GET {{baseUrl}}/videos/{{videoId}}
+
+
+### 14. URL de streaming (público, suporta HTTP Range)
+GET {{baseUrl}}/videos/{{videoId}}/stream
+
+
+### 15. URL de download (somente o dono)
+GET {{baseUrl}}/videos/{{videoId}}/download
+Authorization: Bearer {{accessToken}}

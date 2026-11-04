@@ -12,6 +12,72 @@ services:
         condition: service_healthy
       mailpit:
         condition: service_started
+      seaweedfs:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  video-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: npm run start:worker:dev
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_healthy
+      storage-init:
+        condition: service_completed_successfully
+
+  storage-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    command: npm run storage:bootstrap
+    volumes:
+      - .:/home/node/app
+    depends_on:
+      seaweedfs:
+        condition: service_healthy
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.51
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        printf '{"identities":[{"name":"admin","credentials":[{"accessKey":"%s","secretKey":"%s"}],"actions":["Admin","Read","List","Tagging","Write"]}]}'
+        "$$S3_ACCESS_KEY" "$$S3_SECRET_KEY" > /tmp/s3.json &&
+        exec weed server -dir=/data -s3 -s3.config=/tmp/s3.json
+    environment:
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY:-streamtube}
+      - S3_SECRET_KEY=${S3_SECRET_KEY:-streamtube-secret}
+    ports:
+      - "8333:8333"
+    volumes:
+      - seaweedfs-data:/data
+    healthcheck:
+      # 127.0.0.1, not localhost: busybox wget resolves localhost to ::1, where weed does not listen
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8333/healthz > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   db:
     image: postgres:17
@@ -32,5 +98,8 @@ services:
     ports:
       - "1025:1025"
       - "8025:8025"
+
+volumes:
+  seaweedfs-data:
 
 

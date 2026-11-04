@@ -79,6 +79,34 @@ describe('Swagger endpoints (e2e)', () => {
       });
     });
 
+    it('GET /api/docs-json documents the video operations with bearer security on protected ones', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const paths = (res.body as Record<string, unknown>).paths as Record<
+        string,
+        Record<string, { security?: unknown[] }>
+      >;
+      const operations: [string, string, boolean][] = [
+        ['/videos', 'post', true],
+        ['/videos/{id}/upload/parts', 'post', true],
+        ['/videos/{id}/upload/complete', 'post', true],
+        ['/videos/{id}', 'get', false],
+        ['/videos/{id}/stream', 'get', false],
+        ['/videos/{id}/download', 'get', true],
+      ];
+
+      for (const [path, method, isProtected] of operations) {
+        const operation = paths[path]?.[method];
+        expect(operation).toBeDefined();
+        if (isProtected) {
+          expect(operation.security).toEqual([{ 'access-token': [] }]);
+        } else {
+          expect(operation.security).toBeUndefined();
+        }
+      }
+    });
+
     it('GET /api/docs-yaml returns 200 with YAML content', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/docs-yaml')
