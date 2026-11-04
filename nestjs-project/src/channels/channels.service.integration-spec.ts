@@ -6,11 +6,21 @@ import {
   createTestDataSource,
 } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
+import { NicknameTakenException } from '../common/exceptions/domain.exception';
+import { NICKNAME_CHANGE_COOLDOWN_MS } from './channels.constants';
 import { ChannelsService } from './channels.service';
 import { Channel } from './entities/channel.entity';
 import { Video } from '../videos/entities/video.entity';
+import { Category } from '../categories/entities/category.entity';
 
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
+const ALL_ENTITIES = [
+  User,
+  Channel,
+  RefreshToken,
+  VerificationToken,
+  Video,
+  Category,
+];
 
 describe('ChannelsService (integration)', () => {
   let dataSource: DataSource;
@@ -88,6 +98,70 @@ describe('ChannelsService (integration)', () => {
 
       const channels = await channelRepository.find();
       expect(channels).toHaveLength(2);
+    });
+  });
+
+  describe('updateProfile', () => {
+    it('maps the unique violation on a taken nickname to NicknameTakenException and persists nothing', async () => {
+      const owner = await createUser();
+      const other = await createUser();
+      await channelsService.createChannel(owner.id, 'owner@example.com');
+      await channelsService.createChannel(other.id, 'taken@example.com');
+
+      await expect(
+        channelsService.updateProfile(owner.id, {
+          nickname: 'taken',
+          name: 'Should not persist',
+        }),
+      ).rejects.toBeInstanceOf(NicknameTakenException);
+
+      const persisted = await channelRepository.findOneByOrFail({
+        user_id: owner.id,
+      });
+      expect(persisted.nickname).toBe('owner');
+      expect(persisted.name).toBe('owner');
+      expect(persisted.nickname_changed_at).toBeNull();
+    });
+
+    it('keeps a grandfathered out-of-rule handle when only name changes', async () => {
+      const owner = await createUser();
+      await channelRepository.save(
+        channelRepository.create({
+          user_id: owner.id,
+          nickname: 'ab',
+          name: 'ab',
+        }),
+      );
+
+      const profile = await channelsService.updateProfile(owner.id, {
+        name: 'Renamed',
+      });
+
+      expect(profile).toMatchObject({ nickname: 'ab', name: 'Renamed' });
+    });
+
+    it('persists the new nickname and nickname_changed_at', async () => {
+      const owner = await createUser();
+      await channelsService.createChannel(owner.id, 'owner@example.com');
+      const before = Date.now();
+
+      const profile = await channelsService.updateProfile(owner.id, {
+        nickname: 'novo_canal',
+      });
+
+      const persisted = await channelRepository.findOneByOrFail({
+        user_id: owner.id,
+      });
+      expect(persisted.nickname).toBe('novo_canal');
+      expect(persisted.nickname_changed_at).not.toBeNull();
+      const changedAt = persisted.nickname_changed_at!.getTime();
+      expect(changedAt).toBeGreaterThanOrEqual(before - 1000);
+      expect(profile.nickname_changed_at).toBe(
+        persisted.nickname_changed_at!.toISOString(),
+      );
+      expect(profile.next_nickname_change_at).toBe(
+        new Date(changedAt + NICKNAME_CHANGE_COOLDOWN_MS).toISOString(),
+      );
     });
   });
 });

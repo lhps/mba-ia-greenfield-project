@@ -7,8 +7,16 @@ import { Channel } from '../channels/entities/channel.entity';
 import { User } from './entities/user.entity';
 import { UsersModule } from './users.module';
 import { Video } from '../videos/entities/video.entity';
+import { Category } from '../categories/entities/category.entity';
 
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
+const ALL_ENTITIES = [
+  User,
+  Channel,
+  RefreshToken,
+  VerificationToken,
+  Video,
+  Category,
+];
 
 describe('UsersModule', () => {
   it('should compile successfully', async () => {

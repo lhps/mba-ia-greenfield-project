@@ -22,6 +22,7 @@ import { Video } from './entities/video.entity';
 import { VideoAccessService } from './video-access.service';
 import { VideoProcessingQueue } from './video-processing.queue';
 import { generatePublicId } from './public-id.util';
+import { deriveTitleFromFileName } from './video-title.util';
 import {
   FAILURE_REASON,
   PROCESSING_STATUS,
@@ -79,6 +80,7 @@ export class VideoUploadService {
         id,
         channel_id: channel.id,
         file_name: dto.file_name,
+        title: deriveTitleFromFileName(dto.file_name),
         file_size: dto.file_size,
         content_type: dto.content_type,
         original_key: originalKey,

@@ -172,3 +172,89 @@ GET {{baseUrl}}/videos/{{videoId}}/stream
 ### 15. URL de download (somente o dono)
 GET {{baseUrl}}/videos/{{videoId}}/download
 Authorization: Bearer {{accessToken}}
+
+
+###
+# ─────────────────────────────────────────────
+# GESTÃO DE VÍDEOS E CANAL (Fase 04)
+# ─────────────────────────────────────────────
+# Fluxo: categorias → editar vídeo → thumbnail personalizada → publicar → painel
+#        → editar canal → página pública do canal + próxima página via next_cursor.
+# Usa @accessToken e @videoId acima; o vídeo precisa estar com processing_status = ready para publicar.
+@channelNickname = cole-o-nickname-aqui
+@nextCursor = {{channelVideos.response.body.$.next_cursor}}
+
+### 16. Listar categorias (público) — use um `slug` no campo `category` da edição
+GET {{baseUrl}}/categories
+
+
+### 17. Editar informações do vídeo (somente o dono; ao menos um campo; `null` limpa description/category)
+PATCH {{baseUrl}}/videos/{{videoId}}
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "title": "Minha viagem à praia",
+  "description": "Um dia de sol no litoral.",
+  "category": "<slug retornado em GET /categories>",
+  "visibility": "public"
+}
+
+
+### 18. Enviar thumbnail personalizada (multipart, campo `file`; JPEG/PNG/WebP ≤ 2 MB → JPEG 1280×720)
+PUT {{baseUrl}}/videos/{{videoId}}/thumbnail
+Authorization: Bearer {{accessToken}}
+Content-Type: multipart/form-data; boundary=StreamTubeBoundary
+
+--StreamTubeBoundary
+Content-Disposition: form-data; name="file"; filename="thumbnail.png"
+Content-Type: image/png
+
+< ./test/fixtures/thumbnail.png
+--StreamTubeBoundary--
+
+
+### 19. Publicar (exige processing_status = ready e categoria; idempotente)
+POST {{baseUrl}}/videos/{{videoId}}/publish
+Authorization: Bearer {{accessToken}}
+
+
+### 20. Despublicar — volta para rascunho mantendo published_at (idempotente)
+POST {{baseUrl}}/videos/{{videoId}}/unpublish
+Authorization: Bearer {{accessToken}}
+
+
+### 21. Painel de gestão — todos os vídeos do meu canal (paginação por offset)
+GET {{baseUrl}}/channels/me/videos?page=1&per_page=20
+Authorization: Bearer {{accessToken}}
+
+
+### 22. Meu canal (inclui next_nickname_change_at — fim do cooldown de 14 dias)
+GET {{baseUrl}}/channels/me
+Authorization: Bearer {{accessToken}}
+
+
+### 23. Editar meu canal (ao menos um campo; nickname ^[a-z0-9_]{3,30}$, troca a cada 14 dias)
+# Após trocar o nickname, atualize @channelNickname acima
+PATCH {{baseUrl}}/channels/me
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "nickname": "novo_canal",
+  "name": "Meu Canal",
+  "description": "Vídeos de viagem e natureza."
+}
+
+
+### 24. Página pública do canal (público)
+GET {{baseUrl}}/channels/{{channelNickname}}
+
+
+### 25. Vídeos públicos do canal — primeira página (público; somente publicados, públicos e prontos)
+# @name channelVideos
+GET {{baseUrl}}/channels/{{channelNickname}}/videos?limit=2
+
+
+### 26. Vídeos públicos do canal — próxima página (usa o next_cursor da resposta anterior; null = última página)
+GET {{baseUrl}}/channels/{{channelNickname}}/videos?limit=2&cursor={{nextCursor}}

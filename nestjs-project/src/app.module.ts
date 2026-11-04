@@ -15,6 +15,7 @@ import uploadConfig from './config/upload.config';
 import { envValidationSchema } from './config/env.validation';
 import { QueueModule } from './queue/queue.module';
 import { VideosModule } from './videos/videos.module';
+import { CategoriesModule } from './categories/categories.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { VideosModule } from './videos/videos.module';
     QueueModule,
     AuthModule,
     VideosModule,
+    CategoriesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

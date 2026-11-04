@@ -11,3 +11,6 @@ export const MULTIPART_COMPLETION_ERROR_CODES = new Set([
 ]);
 
 export const NO_SUCH_UPLOAD = 'NoSuchUpload';
+
+/** Key prefix granted anonymous read by the bucket policy (TD-07). */
+export const PUBLIC_READ_PREFIX = 'thumbnails/';

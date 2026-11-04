@@ -16,6 +16,12 @@ type ErrorBody = { error: string };
 
 const OWNER = 'stream_owner@example.com';
 
+/** Anonymous streaming requires a published video since Phase 04 (drafts are owner-only). */
+const PUBLISHED = {
+  publication_status: 'published',
+  published_at: new Date('2026-11-04T08:00:00Z'),
+} as const;
+
 describe('videos-stream-download', () => {
   let ctx: VideosE2eContext;
   let tokenA: string;
@@ -48,7 +54,10 @@ describe('videos-stream-download', () => {
   });
 
   async function seedReadyVideo() {
-    const video = await seedVideo(ctx, OWNER, { processing_status: 'ready' });
+    const video = await seedVideo(ctx, OWNER, {
+      ...PUBLISHED,
+      processing_status: 'ready',
+    });
     const videoKey = `videos/${video.id}/video.mp4`;
     await s3.send(
       new PutObjectCommand({
@@ -91,6 +100,7 @@ describe('videos-stream-download', () => {
 
   test('stream-de-video-nao-pronto-retorna-409', async () => {
     const video = await seedVideo(ctx, OWNER, {
+      ...PUBLISHED,
       processing_status: 'processing',
     });
 

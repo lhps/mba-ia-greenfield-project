@@ -69,4 +69,27 @@ describe('FfmpegService (integration, real ffmpeg)', () => {
       expect(result).toBe(false);
     }
   });
+
+  it('should normalize a non-16:9 PNG into a 1280x720 JPEG', async () => {
+    const output = join(dir, 'normalized.jpg');
+    await service.normalizeThumbnail(join(FIXTURES, 'thumbnail.png'), output);
+
+    const bytes = await readFile(output);
+    expect(bytes.subarray(0, 2)).toEqual(Buffer.from([0xff, 0xd8]));
+    const probe = await service.probe(output);
+    expect(probe).toMatchObject({
+      width: 1280,
+      height: 720,
+      video_codec: 'mjpeg',
+    });
+  });
+
+  it('should fail with MediaProcessError for a truncated JPEG', async () => {
+    await expect(
+      service.normalizeThumbnail(
+        join(FIXTURES, 'thumbnail-invalid.jpg'),
+        join(dir, 'invalid.jpg'),
+      ),
+    ).rejects.toBeInstanceOf(MediaProcessError);
+  });
 });

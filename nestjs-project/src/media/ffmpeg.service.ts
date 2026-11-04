@@ -4,6 +4,10 @@ import { ProcessRunner } from './process-runner';
 const PROBE_TIMEOUT_MS = 60_000;
 const ENCODE_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 const THUMBNAIL_TIMEOUT_MS = 120_000;
+const CUSTOM_THUMBNAIL_TIMEOUT_MS = 30_000;
+
+/** Uniform 16:9 custom-thumbnail output (TD-06). */
+export const NORMALIZED_THUMBNAIL = { WIDTH: 1280, HEIGHT: 720 } as const;
 
 export interface ProbeResult {
   duration_seconds: number | null;
@@ -115,6 +119,43 @@ export class FfmpegService {
         output,
       ],
       { timeoutMs: THUMBNAIL_TIMEOUT_MS },
+    );
+  }
+
+  /**
+   * Re-encodes an uploaded image into a 1280×720 JPEG: scale to cover, then
+   * center-crop, dropping metadata (EXIF). Strict decoding (`-xerror`,
+   * `-err_detect explode`) makes truncated or corrupt input fail instead of
+   * producing a partially decoded frame; failures surface as `MediaProcessError`.
+   */
+  async normalizeThumbnail(input: string, output: string): Promise<void> {
+    const { WIDTH, HEIGHT } = NORMALIZED_THUMBNAIL;
+    await this.runner.run(
+      'ffmpeg',
+      [
+        '-y',
+        '-v',
+        'error',
+        '-xerror',
+        '-err_detect',
+        'explode',
+        '-i',
+        input,
+        '-frames:v',
+        '1',
+        '-vf',
+        `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=increase,crop=${WIDTH}:${HEIGHT},format=yuvj420p`,
+        '-map_metadata',
+        '-1',
+        '-q:v',
+        '3',
+        '-f',
+        'image2',
+        '-c:v',
+        'mjpeg',
+        output,
+      ],
+      { timeoutMs: CUSTOM_THUMBNAIL_TIMEOUT_MS },
     );
   }
 }

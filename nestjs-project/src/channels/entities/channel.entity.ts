@@ -28,6 +28,9 @@ export class Channel {
   @Column({ type: 'uuid', unique: true })
   user_id: string;
 
+  @Column({ type: 'timestamptz', nullable: true })
+  nickname_changed_at: Date | null;
+
   @CreateDateColumn()
   created_at: Date;
 
