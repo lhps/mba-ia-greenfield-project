@@ -1,3 +1,4 @@
+import type { ValidationError } from 'joi';
 import { envValidationSchema } from './env.validation';
 
 const requiredEnv = {
@@ -13,11 +14,16 @@ const requiredEnv = {
   S3_BUCKET: 'bucket',
 };
 
+type EnvValidationResult = {
+  error?: ValidationError;
+  value: { SWAGGER_ENABLED: string };
+};
+
 const validate = (env: Record<string, string>) =>
   envValidationSchema.validate(
     { ...requiredEnv, ...env },
     { allowUnknown: true, abortEarly: false },
-  );
+  ) as EnvValidationResult;
 
 describe('envValidationSchema — SWAGGER_ENABLED', () => {
   it('should reject SWAGGER_ENABLED with an invalid value', () => {
