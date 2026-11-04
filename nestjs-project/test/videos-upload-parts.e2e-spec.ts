@@ -8,6 +8,12 @@ import {
   type VideosE2eContext,
 } from './helpers/videos-e2e';
 
+type PartsBody = {
+  parts: { part_number: number; url: string }[];
+  expires_at: string;
+};
+type ErrorBody = { error: string };
+
 describe('videos-upload-parts', () => {
   let ctx: VideosE2eContext;
   let tokenA: string;
@@ -35,7 +41,7 @@ describe('videos-upload-parts', () => {
         content_type: 'video/mp4',
       })
       .expect(201);
-    publicId = created.body.public_id;
+    publicId = (created.body as { public_id: string }).public_id;
   });
 
   const parts = (id: string, token: string | null, body: object) => {
@@ -53,13 +59,12 @@ describe('videos-upload-parts', () => {
       200,
     );
 
-    expect(
-      res.body.parts.map((p: { part_number: number }) => p.part_number),
-    ).toEqual([1, 2]);
-    for (const part of res.body.parts) {
+    const body = res.body as PartsBody;
+    expect(body.parts.map((p) => p.part_number)).toEqual([1, 2]);
+    for (const part of body.parts) {
       expect(part.url.startsWith(process.env.S3_PUBLIC_ENDPOINT!)).toBe(true);
     }
-    expect(new Date(res.body.expires_at).getTime()).toBeGreaterThan(Date.now());
+    expect(new Date(body.expires_at).getTime()).toBeGreaterThan(Date.now());
   });
 
   test('put-na-url-presignada-retorna-etag', async () => {
@@ -67,7 +72,7 @@ describe('videos-upload-parts', () => {
       200,
     );
 
-    const put = await presignedRequest(res.body.parts[0].url, {
+    const put = await presignedRequest((res.body as PartsBody).parts[0].url, {
       method: 'PUT',
       body: Buffer.alloc(5 * 1024 * 1024, 1),
     });
@@ -82,7 +87,7 @@ describe('videos-upload-parts', () => {
     const res = await parts(publicId, tokenB, { part_numbers: [1] }).expect(
       403,
     );
-    expect(res.body.error).toBe('VIDEO_ACCESS_DENIED');
+    expect((res.body as ErrorBody).error).toBe('VIDEO_ACCESS_DENIED');
 
     await parts(publicId, null, { part_numbers: [1] }).expect(401);
   });
@@ -91,24 +96,24 @@ describe('videos-upload-parts', () => {
     const unknown = await parts('AAAAAAAAAAA', tokenA, {
       part_numbers: [1],
     }).expect(404);
-    expect(unknown.body.error).toBe('VIDEO_NOT_FOUND');
+    expect((unknown.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
 
     const malformed = await parts('abc', tokenA, { part_numbers: [1] }).expect(
       404,
     );
-    expect(malformed.body.error).toBe('VIDEO_NOT_FOUND');
+    expect((malformed.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
   });
 
   test('numero-de-parte-fora-do-intervalo-retorna-400', async () => {
     const outOfRange = await parts(publicId, tokenA, {
       part_numbers: [4],
     }).expect(400);
-    expect(outOfRange.body.error).toBe('VALIDATION_ERROR');
+    expect((outOfRange.body as ErrorBody).error).toBe('VALIDATION_ERROR');
 
     const empty = await parts(publicId, tokenA, { part_numbers: [] }).expect(
       400,
     );
-    expect(empty.body.error).toBe('VALIDATION_ERROR');
+    expect((empty.body as ErrorBody).error).toBe('VALIDATION_ERROR');
   });
 
   test('upload-fora-de-andamento-retorna-409', async () => {
@@ -119,6 +124,6 @@ describe('videos-upload-parts', () => {
     const res = await parts(publicId, tokenA, { part_numbers: [1] }).expect(
       409,
     );
-    expect(res.body.error).toBe('UPLOAD_NOT_IN_PROGRESS');
+    expect((res.body as ErrorBody).error).toBe('UPLOAD_NOT_IN_PROGRESS');
   });
 });

@@ -7,7 +7,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { DataSource } from 'typeorm';
 import { AppModule } from '../../src/app.module';
-import { AuthService } from '../../src/auth/auth.service';
+import { MailService } from '../../src/mail/mail.service';
 import { DomainExceptionFilter } from '../../src/common/filters/domain-exception.filter';
 import { ValidationExceptionFilter } from '../../src/common/filters/validation-exception.filter';
 import { QUEUES } from '../../src/queue/queue.constants';
@@ -70,12 +70,13 @@ export async function createConfirmedUser(
   email: string,
   password = 'password123',
 ): Promise<string> {
-  const mailService = app.get(AuthService).mailService;
+  const mailService = app.get(MailService);
   let token = '';
   jest
     .spyOn(mailService, 'sendConfirmationEmail')
-    .mockImplementationOnce(async (_e: string, _n: string, t: string) => {
+    .mockImplementationOnce((_e: string, _n: string, t: string) => {
       token = t;
+      return Promise.resolve();
     });
   await request(app.getHttpServer())
     .post('/auth/register')
@@ -89,7 +90,7 @@ export async function createConfirmedUser(
     .post('/auth/login')
     .send({ email, password })
     .expect(200);
-  return login.body.access_token as string;
+  return (login.body as { access_token: string }).access_token;
 }
 
 /** Inserts a video row directly (bypassing upload/processing) for read-side scenarios. */

@@ -61,7 +61,11 @@ describe('VideoProcessingQueue (integration)', () => {
     await producer.enqueue(videoId);
 
     const jobs = await queue.getJobs(['waiting', 'delayed', 'active']);
-    expect(jobs.filter((job) => job.data.video_id === videoId)).toHaveLength(1);
+    expect(
+      jobs.filter(
+        (job) => (job.data as { video_id: string }).video_id === videoId,
+      ),
+    ).toHaveLength(1);
   });
 
   it('should leave jobs waiting because no worker is registered in this process', async () => {

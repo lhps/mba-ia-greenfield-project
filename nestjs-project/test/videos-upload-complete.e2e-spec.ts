@@ -9,6 +9,9 @@ import {
   type VideosE2eContext,
 } from './helpers/videos-e2e';
 
+type PartsBody = { parts: { url: string }[] };
+type ErrorBody = { error: string };
+
 const FIVE_MIB = 5 * 1024 * 1024;
 
 describe('videos-upload-complete', () => {
@@ -58,13 +61,13 @@ describe('videos-upload-complete', () => {
         content_type: 'video/mp4',
       })
       .expect(201);
-    const publicId = created.body.public_id as string;
+    const publicId = (created.body as { public_id: string }).public_id;
     const urls = await request(server)
       .post(`/videos/${publicId}/upload/parts`)
       .set('Authorization', `Bearer ${token}`)
       .send({ part_numbers: [1] })
       .expect(200);
-    const put = await presignedRequest(urls.body.parts[0].url, {
+    const put = await presignedRequest((urls.body as PartsBody).parts[0].url, {
       method: 'PUT',
       body: Buffer.alloc(bytes, 1),
     });
@@ -139,7 +142,7 @@ describe('videos-upload-complete', () => {
     const bad = await complete(ctx, publicId, tokenA, [
       { part_number: 1, etag: '"deadbeef"' },
     ]).expect(400);
-    expect(bad.body.error).toBe('UPLOAD_PARTS_INVALID');
+    expect((bad.body as ErrorBody).error).toBe('UPLOAD_PARTS_INVALID');
     const video = await findVideo(ctx, publicId);
     expect(video.processing_status).toBe('uploading');
     expect(video.upload_id).not.toBeNull();
@@ -165,7 +168,7 @@ describe('videos-upload-complete', () => {
       const res = await complete(small, publicId, token, [
         { part_number: 1, etag },
       ]).expect(413);
-      expect(res.body.error).toBe('FILE_TOO_LARGE');
+      expect((res.body as ErrorBody).error).toBe('FILE_TOO_LARGE');
 
       const video = await findVideo(small, publicId);
       expect(video).toMatchObject({
@@ -206,7 +209,7 @@ describe('videos-upload-complete', () => {
     const res = await complete(ctx, publicId, tokenA, [
       { part_number: 1, etag },
     ]).expect(409);
-    expect(res.body.error).toBe('UPLOAD_NOT_IN_PROGRESS');
+    expect((res.body as ErrorBody).error).toBe('UPLOAD_NOT_IN_PROGRESS');
   });
 
   test('nao-dono-retorna-403', async () => {
@@ -220,12 +223,12 @@ describe('videos-upload-complete', () => {
     const res = await complete(ctx, publicId, tokenB, [
       { part_number: 1, etag },
     ]).expect(403);
-    expect(res.body.error).toBe('VIDEO_ACCESS_DENIED');
+    expect((res.body as ErrorBody).error).toBe('VIDEO_ACCESS_DENIED');
     await expect(findVideo(ctx, publicId)).resolves.toMatchObject({
       processing_status: 'uploading',
     });
 
     const empty = await complete(ctx, publicId, tokenA, []).expect(400);
-    expect(empty.body.error).toBe('VALIDATION_ERROR');
+    expect((empty.body as ErrorBody).error).toBe('VALIDATION_ERROR');
   });
 });

@@ -72,7 +72,7 @@ describe('FfmpegService', () => {
     runner.run.mockResolvedValue({ stdout: '', stderr: '' });
     await service.toFaststartMp4('in', 'out.mp4', { transcode: false });
 
-    const [cmd, args] = runner.run.mock.calls[0];
+    const [cmd, args] = runner.run.mock.calls[0] as [string, string[]];
     expect(cmd).toBe('ffmpeg');
     expect(args).toEqual(
       expect.arrayContaining(['-c', 'copy', '-movflags', '+faststart']),
@@ -85,7 +85,7 @@ describe('FfmpegService', () => {
     runner.run.mockResolvedValue({ stdout: '', stderr: '' });
     await service.toFaststartMp4('in', 'out.mp4', { transcode: true });
 
-    const [, args] = runner.run.mock.calls[0];
+    const [, args] = runner.run.mock.calls[0] as [string, string[]];
     expect(args).toEqual(
       expect.arrayContaining(['-c:v', 'libx264', '-c:a', 'aac', '+faststart']),
     );
@@ -96,7 +96,7 @@ describe('FfmpegService', () => {
     runner.run.mockResolvedValue({ stdout: '', stderr: '' });
     await service.extractThumbnail('in', 'thumb.jpg', 0.2);
 
-    const [, args] = runner.run.mock.calls[0];
+    const [, args] = runner.run.mock.calls[0] as [string, string[]];
     expect(args).toEqual(
       expect.arrayContaining(['-ss', '0.200', '-frames:v', '1']),
     );

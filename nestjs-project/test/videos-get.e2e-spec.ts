@@ -8,6 +8,9 @@ import {
   type VideosE2eContext,
 } from './helpers/videos-e2e';
 
+type VideoBody = { created_at: string; thumbnail_url: string };
+type ErrorBody = { error: string };
+
 const OWNER = 'get_owner@example.com';
 
 describe('videos-get', () => {
@@ -77,12 +80,11 @@ describe('videos-get', () => {
       width: 320,
       height: 240,
     });
-    expect(new Date(res.body.created_at).toISOString()).toBe(
-      res.body.created_at,
+    const body = res.body as VideoBody;
+    expect(new Date(body.created_at).toISOString()).toBe(body.created_at);
+    expect(body.thumbnail_url.startsWith(process.env.S3_PUBLIC_ENDPOINT!)).toBe(
+      true,
     );
-    expect(
-      res.body.thumbnail_url.startsWith(process.env.S3_PUBLIC_ENDPOINT!),
-    ).toBe(true);
   });
 
   test('video-em-processamento-retorna-metadados-nulos', async () => {
@@ -123,9 +125,9 @@ describe('videos-get', () => {
 
   test('id-malformado-ou-desconhecido-retorna-404', async () => {
     const malformed = await get('abc').expect(404);
-    expect(malformed.body.error).toBe('VIDEO_NOT_FOUND');
+    expect((malformed.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
 
     const unknown = await get('AAAAAAAAAAA').expect(404);
-    expect(unknown.body.error).toBe('VIDEO_NOT_FOUND');
+    expect((unknown.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
   });
 });

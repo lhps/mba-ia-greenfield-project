@@ -8,6 +8,9 @@ import {
   type VideosE2eContext,
 } from './helpers/videos-e2e';
 
+type CreatedBody = { public_id: string };
+type ErrorBody = { error: string };
+
 describe('videos-create', () => {
   let ctx: VideosE2eContext;
   let tokenA: string;
@@ -53,7 +56,7 @@ describe('videos-create', () => {
     const res = await post(tokenA, validBody).expect(201);
 
     expect(res.body).toEqual({
-      public_id: expect.stringMatching(/^[A-Za-z0-9_-]{11}$/),
+      public_id: expect.stringMatching(/^[A-Za-z0-9_-]{11}$/) as string,
       processing_status: 'uploading',
       publication_status: 'draft',
       part_size: 67108864,
@@ -61,7 +64,7 @@ describe('videos-create', () => {
     });
 
     const video = await ctx.dataSource.getRepository(Video).findOneOrFail({
-      where: { public_id: res.body.public_id },
+      where: { public_id: (res.body as CreatedBody).public_id },
       relations: { channel: { user: true } },
     });
     expect(video.channel.user.email).toBe('video_a@example.com');
@@ -85,7 +88,9 @@ describe('videos-create', () => {
     const first = await post(tokenA, validBody).expect(201);
     const second = await post(tokenA, validBody).expect(201);
 
-    expect(first.body.public_id).not.toBe(second.body.public_id);
+    expect((first.body as CreatedBody).public_id).not.toBe(
+      (second.body as CreatedBody).public_id,
+    );
   });
 
   // 2. Validação e autenticação
@@ -97,8 +102,10 @@ describe('videos-create', () => {
       file_size: 10737418241,
     }).expect(400);
 
-    expect(res.body.error).toBe('VALIDATION_ERROR');
-    expect(JSON.stringify(res.body.message)).toContain('file_size');
+    expect((res.body as ErrorBody).error).toBe('VALIDATION_ERROR');
+    expect(
+      JSON.stringify((res.body as { message: unknown }).message),
+    ).toContain('file_size');
     await expect(ctx.dataSource.getRepository(Video).count()).resolves.toBe(0);
   });
 
@@ -108,14 +115,14 @@ describe('videos-create', () => {
       file_size: 1024,
       content_type: 'application/pdf',
     }).expect(400);
-    expect(res.body.error).toBe('VALIDATION_ERROR');
+    expect((res.body as ErrorBody).error).toBe('VALIDATION_ERROR');
     await expect(ctx.dataSource.getRepository(Video).count()).resolves.toBe(0);
 
     const unknown = await post(tokenA, {
       ...validBody,
       processing_status: 'ready',
     }).expect(400);
-    expect(unknown.body.error).toBe('VALIDATION_ERROR');
+    expect((unknown.body as ErrorBody).error).toBe('VALIDATION_ERROR');
   });
 
   test('exige-autenticacao', async () => {

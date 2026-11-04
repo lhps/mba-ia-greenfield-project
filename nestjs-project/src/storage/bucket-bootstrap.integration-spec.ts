@@ -50,7 +50,11 @@ describe('bootstrapBucket (integration)', () => {
     expect(cors.CORSRules).toEqual([
       expect.objectContaining({
         AllowedOrigins: [origin],
-        AllowedMethods: expect.arrayContaining(['GET', 'PUT', 'HEAD']),
+        AllowedMethods: expect.arrayContaining([
+          'GET',
+          'PUT',
+          'HEAD',
+        ]) as string[],
         ExposeHeaders: ['ETag'],
       }),
     ]);

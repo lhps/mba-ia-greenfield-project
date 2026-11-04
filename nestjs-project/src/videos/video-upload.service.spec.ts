@@ -53,7 +53,7 @@ describe('VideoUploadService', () => {
     jest.clearAllMocks();
     channels.findByUserId.mockResolvedValue({ id: 'channel-1' });
     storage.createMultipartUpload.mockResolvedValue('upload-1');
-    repo.save.mockImplementation(async (v: Partial<Video>) => v);
+    repo.save.mockImplementation((v: Partial<Video>) => Promise.resolve(v));
 
     const module = await Test.createTestingModule({
       providers: [
@@ -98,12 +98,14 @@ describe('VideoUploadService', () => {
       .mockRejectedValueOnce(
         uniqueViolation('Key (public_id)=(x) already exists.'),
       )
-      .mockImplementationOnce(async (v: Partial<Video>) => v);
+      .mockImplementationOnce((v: Partial<Video>) => Promise.resolve(v));
 
     const result = await service.initiate('user-1', dto);
 
     expect(repo.save).toHaveBeenCalledTimes(2);
-    const [first, second] = repo.save.mock.calls.map(([v]) => v.public_id);
+    const [first, second] = (repo.save.mock.calls as [Partial<Video>][]).map(
+      ([v]) => v.public_id,
+    );
     expect(first).not.toBe(second);
     expect(result.public_id).toBe(second);
   });
@@ -143,10 +145,11 @@ describe('VideoUploadService', () => {
     beforeEach(() => {
       access.findOwnedOrFail.mockResolvedValue(uploading);
       storage.presignUploadPart.mockImplementation(
-        async (_k: string, _u: string, n: number) => ({
-          url: `http://s3/part-${n}`,
-          expiresAt: new Date('2030-01-01T00:00:00Z'),
-        }),
+        (_k: string, _u: string, n: number) =>
+          Promise.resolve({
+            url: `http://s3/part-${n}`,
+            expiresAt: new Date('2030-01-01T00:00:00Z'),
+          }),
       );
     });
 

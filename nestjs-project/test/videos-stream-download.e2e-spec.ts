@@ -11,6 +11,9 @@ import {
   type VideosE2eContext,
 } from './helpers/videos-e2e';
 
+type PresignedBody = { url: string; expires_at: string };
+type ErrorBody = { error: string };
+
 const OWNER = 'stream_owner@example.com';
 
 describe('videos-stream-download', () => {
@@ -74,10 +77,11 @@ describe('videos-stream-download', () => {
     const video = await seedReadyVideo();
 
     const res = await get(`/videos/${video.public_id}/stream`).expect(200);
-    expect(res.body.url.startsWith(process.env.S3_PUBLIC_ENDPOINT!)).toBe(true);
-    expect(new Date(res.body.expires_at).getTime()).toBeGreaterThan(Date.now());
+    const body = res.body as PresignedBody;
+    expect(body.url.startsWith(process.env.S3_PUBLIC_ENDPOINT!)).toBe(true);
+    expect(new Date(body.expires_at).getTime()).toBeGreaterThan(Date.now());
 
-    const ranged = await presignedRequest(res.body.url, {
+    const ranged = await presignedRequest(body.url, {
       headers: { range: 'bytes=0-1023' },
     });
     expect(ranged.status).toBe(206);
@@ -91,7 +95,7 @@ describe('videos-stream-download', () => {
     });
 
     const res = await get(`/videos/${video.public_id}/stream`).expect(409);
-    expect(res.body.error).toBe('VIDEO_NOT_READY');
+    expect((res.body as ErrorBody).error).toBe('VIDEO_NOT_READY');
   });
 
   // 2. Download pelo dono
@@ -102,9 +106,10 @@ describe('videos-stream-download', () => {
     const res = await get(`/videos/${video.public_id}/download`, tokenA).expect(
       200,
     );
-    expect(new Date(res.body.expires_at).getTime()).toBeGreaterThan(Date.now());
+    const body = res.body as PresignedBody;
+    expect(new Date(body.expires_at).getTime()).toBeGreaterThan(Date.now());
 
-    const file = await presignedRequest(res.body.url);
+    const file = await presignedRequest(body.url);
     expect(file.status).toBe(200);
     expect(file.headers['content-disposition']).toBe(
       'attachment; filename="clip.mp4"',
@@ -119,18 +124,18 @@ describe('videos-stream-download', () => {
       `/videos/${video.public_id}/download`,
       tokenB,
     ).expect(403);
-    expect(other.body.error).toBe('VIDEO_ACCESS_DENIED');
+    expect((other.body as ErrorBody).error).toBe('VIDEO_ACCESS_DENIED');
 
     await get(`/videos/${video.public_id}/download`).expect(401);
   });
 
   test('id-desconhecido-retorna-404-em-ambos', async () => {
     const stream = await get('/videos/AAAAAAAAAAA/stream').expect(404);
-    expect(stream.body.error).toBe('VIDEO_NOT_FOUND');
+    expect((stream.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
 
     const download = await get('/videos/AAAAAAAAAAA/download', tokenA).expect(
       404,
     );
-    expect(download.body.error).toBe('VIDEO_NOT_FOUND');
+    expect((download.body as ErrorBody).error).toBe('VIDEO_NOT_FOUND');
   });
 });

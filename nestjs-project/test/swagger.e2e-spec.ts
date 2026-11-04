@@ -83,7 +83,7 @@ describe('Swagger endpoints (e2e)', () => {
       const res = await request(app.getHttpServer())
         .get('/api/docs-json')
         .expect(200);
-      const paths = res.body.paths as Record<
+      const paths = (res.body as Record<string, unknown>).paths as Record<
         string,
         Record<string, { security?: unknown[] }>
       >;

@@ -34,7 +34,10 @@ describe('envValidationSchema — storage, queue and upload', () => {
   });
 
   it('should apply the storage, queue and upload defaults', () => {
-    const { value, error } = validate({});
+    const { value, error } = validate({}) as {
+      value: Record<string, unknown>;
+      error?: Error;
+    };
 
     expect(error).toBeUndefined();
     expect(value).toMatchObject({

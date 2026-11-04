@@ -1,6 +1,6 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
+**Status:** completed
 **SIs:** 14/14 completed
 
 ### SI-03.1 — Infra: Dependencies, FFmpeg Image, SeaweedFS and Redis Services
@@ -113,3 +113,11 @@
 - Out of scope (separate task): unit/integration Jest run never exits (open handle) — suites verified with `--forceExit` during this phase.
 - Out of scope (separate task): `.env.example` has unquoted `MAIL_FROM="StreamTube" <noreply@streamtube.com>`, which breaks Docker Compose `.env` parsing (documented pitfall in `nestjs-project/CLAUDE.md`).
 - Out of scope (separate task): `testing-guide-nestjs-project/references/file-conventions.md` says integration suffix is `*.integration.spec.ts`, but `nestjs-project/CLAUDE.md` and Jest config use `*.integration-spec.ts`.
+
+## Final verification (2026-11-03)
+
+- Unit + integration: 231/231 passing (42 suites, `--runInBand --forceExit`).
+- E2E: 78/78 passing (8 suites) with `--runInBand`. Deliverables command `npm run test:e2e` without `--runInBand` fails 16 tests (suites truncate shared DB concurrently) — `test/jest-e2e.json` lacks a serial setting despite `nestjs-project/CLAUDE.md` saying "already configured" (separate task).
+- Type check: exit 0 after fix — `test/helpers/videos-e2e.ts` read private `AuthService.mailService`; now `app.get(MailService)`.
+- Build: OK, `dist/main.js` + `dist/worker.js` emitted.
+- Lint: 68 errors + 9 warnings in 12 Phase 03 test files fixed (typed `res.body` / mock-call casts, no eslint-disable). The 150 pre-existing errors (present at `8957334`: auth/channels/mail/filters/env/users specs, `test/auth.e2e-spec.ts`, `src/channels/channels.service.ts`, `src/test/create-test-data-source.ts`) were also fixed by user choice — `npm run lint` exits 0. Only non-test source change: `channels.service.ts` types the PG error as `QueryFailedError & { code?: unknown; detail?: unknown }` instead of `any` (same behavior).
