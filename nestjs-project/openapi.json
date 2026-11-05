@@ -7,7 +7,14 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -81,7 +88,16 @@
       "get": {
         "description": "Validates the confirmation token and marks the user's email as confirmed.",
         "operationId": "AuthController_confirmEmail",
-        "parameters": [],
+        "parameters": [
+          {
+            "name": "token",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "204": {
             "description": "Email confirmed successfully"
@@ -439,6 +455,152 @@
         ]
       }
     },
+    "/channels/me": {
+      "get": {
+        "description": "Returns the caller's channel: nickname, name, description, the last nickname change and when the 14-day nickname cooldown ends (null when a change is allowed now).",
+        "operationId": "ChannelsController_getMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelProfileDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Get my channel profile",
+        "tags": [
+          "channels"
+        ]
+      },
+      "patch": {
+        "description": "Partially updates nickname, name and/or description and returns the updated channel (so the client can refresh its channel slug). A new nickname must match ^[a-z0-9_]{3,30}$, not be reserved or taken, and can change once every 14 days; submitting the current nickname is a no-op.",
+        "operationId": "ChannelsController_updateMine",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChannelDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelProfileDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Body fails validation or is empty",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "NICKNAME_TAKEN, NICKNAME_RESERVED or NICKNAME_CHANGE_COOLDOWN (changed less than 14 days ago)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Edit my channel profile",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/channels/{nickname}": {
+      "get": {
+        "description": "Returns the public information of the channel with this nickname (case-insensitive): nickname, name, description and creation date. Anonymous access.",
+        "operationId": "ChannelsController_getByNickname",
+        "parameters": [
+          {
+            "name": "nickname",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicChannelDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CHANNEL_NOT_FOUND — no channel with this nickname",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a public channel page header",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/videos": {
       "post": {
         "description": "Pre-registers the video as a draft under the caller channel and opens a multipart upload. Bytes are sent directly to storage through presigned part URLs.",
@@ -703,7 +865,7 @@
     },
     "/videos/{id}": {
       "get": {
-        "description": "Returns processing state and extracted metadata. Open by unique URL in Phase 03. `:id` is the video public_id.",
+        "description": "Returns the VideoDetail shape. Published videos (public or unlisted) are readable by anyone with the link; a draft is readable only by its owner. Optional bearer token: when valid it identifies the owner, when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id.",
         "operationId": "VideosController_findOne",
         "parameters": [
           {
@@ -721,7 +883,241 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VideoResponseDto"
+                  "$ref": "#/components/schemas/VideoDetailDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found, or the video is a draft and the caller is not its owner",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "Get a video by its unique URL id",
+        "tags": [
+          "videos"
+        ]
+      },
+      "patch": {
+        "description": "Partially updates title, description, category (by slug) and visibility (owner only). At least one field is required; `null` clears description or category. Visibility is independent of publication. `:id` is the video public_id.",
+        "operationId": "VideosController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVideoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoDetailDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed or empty body (VALIDATION_ERROR), or unknown category slug (INVALID_CATEGORY)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller does not own the video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Category cannot be cleared on a published video (PUBLISH_REQUIREMENTS_NOT_MET)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Edit video information",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{id}/publish": {
+      "post": {
+        "description": "Moves the video from draft to published (owner only). Requires processing_status `ready` and a category. `published_at` is set on the first publication and kept on later re-publications. Idempotent: an already published video is returned unchanged. `:id` is the video public_id.",
+        "operationId": "VideosController_publish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller does not own the video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Video is not ready (VIDEO_NOT_READY) or has no category (PUBLISH_REQUIREMENTS_NOT_MET)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Publish a video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{id}/unpublish": {
+      "post": {
+        "description": "Moves the video back to draft (owner only), keeping `published_at`. Idempotent: a draft is returned unchanged. `:id` is the video public_id.",
+        "operationId": "VideosController_unpublish",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoDetailDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller does not own the video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
                 }
               }
             }
@@ -737,7 +1133,119 @@
             }
           }
         },
-        "summary": "Get a video by its unique URL id",
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Unpublish a video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/videos/{id}/thumbnail": {
+      "put": {
+        "description": "Uploads a custom thumbnail (owner only). The image is re-encoded to a 1280×720 JPEG (scaled and center-cropped, metadata dropped), stored under a new versioned public URL, and the previous thumbnail is deleted. Later processing never overwrites a custom thumbnail. `:id` is the video public_id.",
+        "operationId": "VideosController_replaceThumbnail",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "JPEG, PNG or WebP image, at most 2 MB (2 097 152 bytes)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThumbnailResponseDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "File missing, not JPEG/PNG/WebP by content, or undecodable (INVALID_THUMBNAIL)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Caller does not own the video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Video not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File larger than 2 MB (THUMBNAIL_TOO_LARGE)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Replace the video thumbnail",
         "tags": [
           "videos"
         ]
@@ -745,7 +1253,7 @@
     },
     "/videos/{id}/stream": {
       "get": {
-        "description": "Returns a short-lived presigned URL to the processed faststart MP4; storage serves HTTP Range for seeking. Open by unique URL in Phase 03. `:id` is the video public_id.",
+        "description": "Returns a short-lived presigned URL to the processed faststart MP4; storage serves HTTP Range for seeking. Same read rule as GET /videos/:id: published videos for anyone with the link, drafts owner-only. Optional bearer token identifies the owner. `:id` is the video public_id.",
         "operationId": "VideosController_stream",
         "parameters": [
           {
@@ -769,7 +1277,7 @@
             }
           },
           "404": {
-            "description": "Video not found",
+            "description": "Video not found, or the video is a draft and the caller is not its owner",
             "content": {
               "application/json": {
                 "schema": {
@@ -871,6 +1379,174 @@
           "videos"
         ]
       }
+    },
+    "/channels/me/videos": {
+      "get": {
+        "description": "Lists every video of the caller's channel — drafts, published, processing and failed — newest first by created_at, with offset pagination (page/per_page) and the total count.",
+        "operationId": "ChannelVideosController_listMine",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "1-based page number.",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "per_page",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–50).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PanelVideoPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid page / per_page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List my channel videos (management panel)",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/channels/{nickname}/videos": {
+      "get": {
+        "description": "Lists only published, public and ready videos of the channel — drafts and unlisted videos never appear, not even for the owner — newest published_at first, with keyset pagination: pass the previous `next_cursor` as `cursor` (null on the last page).",
+        "operationId": "ChannelVideosController_listPublic",
+        "parameters": [
+          {
+            "name": "nickname",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–50).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 24,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque value from a previous `next_cursor`; omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicVideoPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — malformed cursor or invalid limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CHANNEL_NOT_FOUND — no channel with this nickname",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List a channel public videos",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/categories": {
+      "get": {
+        "description": "Returns the fixed catalog of video categories ordered by name. The slug is the identifier used when editing a video.",
+        "operationId": "CategoriesController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Category catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CategoryListResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List video categories",
+        "tags": [
+          "categories"
+        ]
+      }
     }
   },
   "info": {
@@ -892,31 +1568,210 @@
     "schemas": {
       "RegisterDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
       },
       "ResendConfirmationDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "email"
+        ]
       },
       "LoginDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ]
       },
       "RefreshTokenDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "refresh_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ]
       },
       "ForgotPasswordDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          }
+        },
+        "required": [
+          "email"
+        ]
       },
       "ResetPasswordDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "new_password": {
+            "type": "string",
+            "minLength": 8,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "token",
+          "new_password"
+        ]
+      },
+      "ChannelProfileDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "example": "novo_canal"
+          },
+          "name": {
+            "type": "string",
+            "example": "Meu Canal"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "nickname_changed_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "next_nickname_change_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the 14-day nickname cooldown ends; null when a change is allowed now"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "nickname",
+          "name",
+          "description",
+          "nickname_changed_at",
+          "next_nickname_change_at",
+          "created_at"
+        ]
+      },
+      "UpdateChannelDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "description": "New handle; lowercased, `^[a-z0-9_]{3,30}$`, not reserved, unique.\nCan change once every 14 days; sending the current nickname is a no-op.",
+            "example": "novo_canal"
+          },
+          "name": {
+            "type": "string",
+            "description": "New display name; trimmed, 1–50 characters.",
+            "minLength": 1,
+            "maxLength": 50
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "New description (≤ 1000 characters); `null` clears it.",
+            "maxLength": 1000
+          }
+        }
+      },
+      "PublicChannelDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "example": "novo_canal"
+          },
+          "name": {
+            "type": "string",
+            "example": "Meu Canal"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "nickname",
+          "name",
+          "description",
+          "created_at"
+        ]
       },
       "CreateVideoUploadDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "file_name": {
+            "type": "string",
+            "description": "Original file name of the video being uploaded.",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "file_size": {
+            "type": "number",
+            "description": "Declared size in bytes; must not exceed MAX_UPLOAD_BYTES (10 GiB by default).",
+            "minimum": 1
+          },
+          "content_type": {
+            "type": "string",
+            "description": "Declared MIME type of the video.",
+            "enum": [
+              "video/mp4",
+              "video/quicktime",
+              "video/webm",
+              "video/x-matroska",
+              "video/x-msvideo"
+            ]
+          }
+        },
+        "required": [
+          "file_name",
+          "file_size",
+          "content_type"
+        ]
       },
       "VideoUploadStartedDto": {
         "type": "object",
@@ -936,7 +1791,8 @@
           "publication_status": {
             "type": "string",
             "enum": [
-              "draft"
+              "draft",
+              "published"
             ]
           },
           "part_size": {
@@ -959,7 +1815,22 @@
       },
       "RequestUploadPartsDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "part_numbers": {
+            "description": "Part numbers (1-based) to presign; at most 100 per request.",
+            "uniqueItems": true,
+            "minItems": 1,
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 1
+            }
+          }
+        },
+        "required": [
+          "part_numbers"
+        ]
       },
       "PresignedPartDto": {
         "type": "object",
@@ -997,9 +1868,39 @@
           "expires_at"
         ]
       },
+      "UploadedPartDto": {
+        "type": "object",
+        "properties": {
+          "part_number": {
+            "type": "number",
+            "description": "1-based part number.",
+            "minimum": 1
+          },
+          "etag": {
+            "type": "string",
+            "description": "ETag returned by storage for this part's PUT."
+          }
+        },
+        "required": [
+          "part_number",
+          "etag"
+        ]
+      },
       "CompleteUploadDto": {
         "type": "object",
-        "properties": {}
+        "properties": {
+          "parts": {
+            "description": "Every uploaded part (exactly part_count items, unique part_number).",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UploadedPartDto"
+            }
+          }
+        },
+        "required": [
+          "parts"
+        ]
       },
       "UploadCompletedDto": {
         "type": "object",
@@ -1020,12 +1921,46 @@
           "processing_status"
         ]
       },
-      "VideoResponseDto": {
+      "VideoCategoryDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "musica"
+          },
+          "name": {
+            "type": "string",
+            "example": "Música"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ]
+      },
+      "VideoDetailDto": {
         "type": "object",
         "properties": {
           "public_id": {
             "type": "string",
             "example": "dQw4w9WgXcQ"
+          },
+          "title": {
+            "type": "string",
+            "example": "My trip to the beach"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "category": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/VideoCategoryDto"
+              }
+            ]
           },
           "file_name": {
             "type": "string",
@@ -1043,8 +1978,21 @@
           "publication_status": {
             "type": "string",
             "enum": [
-              "draft"
+              "draft",
+              "published"
             ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "unlisted"
+            ]
+          },
+          "published_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           },
           "duration_seconds": {
             "type": "number",
@@ -1064,7 +2012,7 @@
           "thumbnail_url": {
             "type": "string",
             "nullable": true,
-            "description": "Presigned GET of the thumbnail; null until processed"
+            "description": "Stable public URL (thumbnails/ prefix), presigned GET for legacy keys, or null"
           },
           "created_at": {
             "type": "string",
@@ -1073,14 +2021,62 @@
         },
         "required": [
           "public_id",
+          "title",
+          "description",
+          "category",
           "file_name",
           "processing_status",
           "publication_status",
+          "visibility",
+          "published_at",
           "duration_seconds",
           "width",
           "height",
           "thumbnail_url",
           "created_at"
+        ]
+      },
+      "UpdateVideoDto": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "description": "New title; trimmed, 1–100 characters.",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "description": "New description (≤ 5000 characters); `null` clears it.",
+            "maxLength": 5000
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "description": "Category `slug` (see GET /categories); `null` clears it — rejected on a published video."
+          },
+          "visibility": {
+            "type": "string",
+            "description": "`public` or `unlisted`; editable at any time, independent of publication.",
+            "enum": [
+              "public",
+              "unlisted"
+            ]
+          }
+        }
+      },
+      "ThumbnailResponseDto": {
+        "type": "object",
+        "properties": {
+          "thumbnail_url": {
+            "type": "string",
+            "example": "http://localhost:8333/streamtube/thumbnails/0b6f…/Xq3v9kT0aB1cD2eF.jpg",
+            "description": "Stable public URL of the new 1280×720 JPEG thumbnail"
+          }
+        },
+        "required": [
+          "thumbnail_url"
         ]
       },
       "PresignedUrlResponseDto": {
@@ -1098,6 +2094,212 @@
         "required": [
           "url",
           "expires_at"
+        ]
+      },
+      "PanelVideoDto": {
+        "type": "object",
+        "properties": {
+          "public_id": {
+            "type": "string",
+            "example": "dQw4w9WgXcQ"
+          },
+          "title": {
+            "type": "string",
+            "example": "My trip to the beach"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "Stable public URL (thumbnails/ prefix), presigned GET for legacy keys, or null"
+          },
+          "processing_status": {
+            "type": "string",
+            "enum": [
+              "uploading",
+              "processing",
+              "ready",
+              "failed"
+            ]
+          },
+          "publication_status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published"
+            ]
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "public",
+              "unlisted"
+            ]
+          },
+          "published_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "nullable": true,
+            "example": 2.04
+          },
+          "view_count": {
+            "type": "number",
+            "example": 0,
+            "description": "Always 0 in Phase 04"
+          },
+          "like_count": {
+            "type": "number",
+            "example": 0,
+            "description": "Always 0 in Phase 04"
+          },
+          "comment_count": {
+            "type": "number",
+            "example": 0,
+            "description": "Always 0 in Phase 04"
+          }
+        },
+        "required": [
+          "public_id",
+          "title",
+          "thumbnail_url",
+          "processing_status",
+          "publication_status",
+          "visibility",
+          "published_at",
+          "created_at",
+          "duration_seconds",
+          "view_count",
+          "like_count",
+          "comment_count"
+        ]
+      },
+      "PanelVideoPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PanelVideoDto"
+            }
+          },
+          "page": {
+            "type": "number",
+            "example": 1
+          },
+          "per_page": {
+            "type": "number",
+            "example": 20
+          },
+          "total": {
+            "type": "number",
+            "example": 3,
+            "description": "Total videos of the channel"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "per_page",
+          "total"
+        ]
+      },
+      "PublicVideoDto": {
+        "type": "object",
+        "properties": {
+          "public_id": {
+            "type": "string",
+            "example": "dQw4w9WgXcQ"
+          },
+          "title": {
+            "type": "string",
+            "example": "My trip to the beach"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "nullable": true,
+            "description": "Stable public URL (thumbnails/ prefix), presigned GET for legacy keys, or null"
+          },
+          "duration_seconds": {
+            "type": "number",
+            "nullable": true,
+            "example": 2.04
+          },
+          "published_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "view_count": {
+            "type": "number",
+            "example": 0,
+            "description": "Always 0 in Phase 04"
+          }
+        },
+        "required": [
+          "public_id",
+          "title",
+          "thumbnail_url",
+          "duration_seconds",
+          "published_at",
+          "view_count"
+        ]
+      },
+      "PublicVideoPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicVideoDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque cursor for the next page; null on the last page"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
+      "CategoryResponseDto": {
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "example": "jogos",
+            "description": "Stable category identifier sent when editing a video"
+          },
+          "name": {
+            "type": "string",
+            "example": "Jogos"
+          }
+        },
+        "required": [
+          "slug",
+          "name"
+        ]
+      },
+      "CategoryListResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryResponseDto"
+            }
+          }
+        },
+        "required": [
+          "items"
         ]
       },
       "ApiErrorEnvelope": {

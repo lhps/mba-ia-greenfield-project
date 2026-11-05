@@ -8,8 +8,16 @@ import {
 import { User } from '../../users/entities/user.entity';
 import { Channel } from './channel.entity';
 import { Video } from '../../videos/entities/video.entity';
+import { Category } from '../../categories/entities/category.entity';
 
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
+const ALL_ENTITIES = [
+  User,
+  Channel,
+  RefreshToken,
+  VerificationToken,
+  Video,
+  Category,
+];
 
 describe('Channel entity (integration)', () => {
   let dataSource: DataSource;
@@ -91,6 +99,27 @@ describe('Channel entity (integration)', () => {
     );
 
     expect(channel.description).toBeNull();
+  });
+
+  it('should default nickname_changed_at to null and accept a timestamp', async () => {
+    const user = await createUser();
+    const saved = await channelRepository.save(
+      channelRepository.create({
+        name: 'Chan',
+        nickname: 'chan',
+        user_id: user.id,
+      }),
+    );
+
+    const found = await channelRepository.findOneByOrFail({ id: saved.id });
+    expect(found.nickname_changed_at).toBeNull();
+
+    const changedAt = new Date();
+    await channelRepository.update(saved.id, {
+      nickname_changed_at: changedAt,
+    });
+    const updated = await channelRepository.findOneByOrFail({ id: saved.id });
+    expect(updated.nickname_changed_at).toEqual(changedAt);
   });
 
   it('should enforce one-to-one relation: one user_id per channel', async () => {

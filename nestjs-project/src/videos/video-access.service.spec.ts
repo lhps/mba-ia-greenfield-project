@@ -53,4 +53,79 @@ describe('VideoAccessService', () => {
       video,
     );
   });
+
+  it('should load extra relations alongside the channel for the owner', async () => {
+    repo.findOne.mockResolvedValue(video);
+
+    await service.findOwnedOrFail('AbC_def-123', 'owner', { category: true });
+
+    expect(repo.findOne).toHaveBeenCalledWith({
+      where: { public_id: 'AbC_def-123' },
+      relations: { category: true, channel: true },
+    });
+  });
+
+  describe('findReadableOrFail', () => {
+    const draft = { ...video, publication_status: 'draft' };
+    const published = { ...video, publication_status: 'published' };
+
+    it('should load the channel and category relations', async () => {
+      repo.findOne.mockResolvedValue(published);
+
+      await service.findReadableOrFail('AbC_def-123');
+
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { public_id: 'AbC_def-123' },
+        relations: { channel: true, category: true },
+      });
+    });
+
+    it('should return a published video to an anonymous caller', async () => {
+      repo.findOne.mockResolvedValue(published);
+
+      await expect(service.findReadableOrFail('AbC_def-123')).resolves.toBe(
+        published,
+      );
+    });
+
+    it('should return a published video to a non-owner', async () => {
+      repo.findOne.mockResolvedValue(published);
+
+      await expect(
+        service.findReadableOrFail('AbC_def-123', 'someone-else'),
+      ).resolves.toBe(published);
+    });
+
+    it('should return a draft to its owner', async () => {
+      repo.findOne.mockResolvedValue(draft);
+
+      await expect(
+        service.findReadableOrFail('AbC_def-123', 'owner'),
+      ).resolves.toBe(draft);
+    });
+
+    it('should hide a draft from an anonymous caller as VIDEO_NOT_FOUND', async () => {
+      repo.findOne.mockResolvedValue(draft);
+
+      await expect(
+        service.findReadableOrFail('AbC_def-123'),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
+    });
+
+    it('should hide a draft from a non-owner as VIDEO_NOT_FOUND', async () => {
+      repo.findOne.mockResolvedValue(draft);
+
+      await expect(
+        service.findReadableOrFail('AbC_def-123', 'someone-else'),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
+    });
+
+    it('should reject an unknown public_id', async () => {
+      repo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.findReadableOrFail('AbC_def-123', 'owner'),
+      ).rejects.toBeInstanceOf(VideoNotFoundException);
+    });
+  });
 });

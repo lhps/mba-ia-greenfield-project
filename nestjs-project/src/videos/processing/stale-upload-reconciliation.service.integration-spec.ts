@@ -14,6 +14,7 @@ import { StorageService } from '../../storage/storage.service';
 import { cleanAllTables } from '../../test/create-test-data-source';
 import { User } from '../../users/entities/user.entity';
 import { Video } from '../entities/video.entity';
+import { Category } from '../../categories/entities/category.entity';
 import { generatePublicId } from '../public-id.util';
 import { STORAGE_KEYS, type ProcessingStatus } from '../videos.constants';
 import { StaleUploadReconciliationService } from './stale-upload-reconciliation.service';
@@ -43,7 +44,14 @@ describe('StaleUploadReconciliationService (integration)', () => {
           username: process.env.DB_USERNAME,
           password: process.env.DB_PASSWORD,
           database: process.env.DB_NAME,
-          entities: [User, Channel, RefreshToken, VerificationToken, Video],
+          entities: [
+            User,
+            Channel,
+            RefreshToken,
+            VerificationToken,
+            Video,
+            Category,
+          ],
           synchronize: false,
         }),
         TypeOrmModule.forFeature([Video]),
@@ -85,6 +93,7 @@ describe('StaleUploadReconciliationService (integration)', () => {
         channel_id: channelId,
         public_id: generatePublicId(),
         file_name: 'clip.mp4',
+        title: 'clip',
         file_size: 1024,
         content_type: 'video/mp4',
         original_key: 'pending',

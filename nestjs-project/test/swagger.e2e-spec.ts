@@ -107,6 +107,64 @@ describe('Swagger endpoints (e2e)', () => {
       }
     });
 
+    it('GET /api/docs-json documents the Phase 04 video and channel management operations with bearer security only on authenticated ones', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const paths = (res.body as Record<string, unknown>).paths as Record<
+        string,
+        Record<string, { security?: unknown[] }>
+      >;
+      const operations: [string, string, boolean][] = [
+        ['/categories', 'get', false],
+        ['/videos/{id}', 'get', false],
+        ['/videos/{id}/stream', 'get', false],
+        ['/videos/{id}', 'patch', true],
+        ['/videos/{id}/publish', 'post', true],
+        ['/videos/{id}/unpublish', 'post', true],
+        ['/videos/{id}/thumbnail', 'put', true],
+        ['/channels/me', 'get', true],
+        ['/channels/me', 'patch', true],
+        ['/channels/me/videos', 'get', true],
+        ['/channels/{nickname}', 'get', false],
+        ['/channels/{nickname}/videos', 'get', false],
+      ];
+
+      for (const [path, method, isProtected] of operations) {
+        const operation = paths[path]?.[method];
+        expect(operation).toBeDefined();
+        if (isProtected) {
+          expect(operation.security).toEqual([{ 'access-token': [] }]);
+        } else {
+          expect(operation.security).toBeUndefined();
+        }
+      }
+    });
+
+    it('GET /api/docs-json documents PUT /videos/{id}/thumbnail as a multipart upload with a required binary file', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const paths = (res.body as Record<string, unknown>).paths as Record<
+        string,
+        Record<string, { requestBody?: Record<string, unknown> }>
+      >;
+
+      const requestBody = paths['/videos/{id}/thumbnail']?.put?.requestBody;
+
+      expect(requestBody).toMatchObject({
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['file'],
+              properties: { file: { type: 'string', format: 'binary' } },
+            },
+          },
+        },
+      });
+    });
+
     it('GET /api/docs-yaml returns 200 with YAML content', async () => {
       const res = await request(app.getHttpServer())
         .get('/api/docs-yaml')

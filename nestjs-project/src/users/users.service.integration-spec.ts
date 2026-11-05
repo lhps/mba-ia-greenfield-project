@@ -10,8 +10,16 @@ import {
 import { User } from './entities/user.entity';
 import { UsersService } from './users.service';
 import { Video } from '../videos/entities/video.entity';
+import { Category } from '../categories/entities/category.entity';
 
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
+const ALL_ENTITIES = [
+  User,
+  Channel,
+  RefreshToken,
+  VerificationToken,
+  Video,
+  Category,
+];
 
 describe('UsersService (integration)', () => {
   let dataSource: DataSource;
@@ -53,6 +61,23 @@ describe('UsersService (integration)', () => {
       const dbChannel = await channelRepository.findOneBy({ user_id: user.id });
       expect(dbUser).not.toBeNull();
       expect(dbChannel).not.toBeNull();
+    });
+
+    it('pads a generated nickname shorter than 3 chars (ab@x.com)', async () => {
+      const user = await usersService.createUserWithChannel(
+        'ab@x.com',
+        'hashed',
+      );
+      expect(user.channel.nickname.length).toBeGreaterThanOrEqual(3);
+      expect(user.channel.nickname).toMatch(/^ab_[a-z0-9]{3}$/);
+    });
+
+    it('falls back to user_<random> when the prefix is reserved (admin@x.com)', async () => {
+      const user = await usersService.createUserWithChannel(
+        'admin@x.com',
+        'hashed',
+      );
+      expect(user.channel.nickname).toMatch(/^user_[a-z0-9]{8}$/);
     });
 
     it('derives nickname from email prefix', async () => {

@@ -109,6 +109,7 @@ export async function seedVideo(
       channel_id: user.channel.id,
       public_id: generatePublicId(),
       file_name: 'clip.mov',
+      title: 'clip',
       file_size: 1024,
       content_type: 'video/quicktime',
       original_key: 'unused',

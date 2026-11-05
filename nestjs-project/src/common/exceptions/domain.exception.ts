@@ -102,3 +102,74 @@ export class VideoNotReadyException extends DomainException {
     super('VIDEO_NOT_READY', 409, 'Video is not ready for playback');
   }
 }
+
+export class InvalidCategoryException extends DomainException {
+  constructor() {
+    super('INVALID_CATEGORY', 400, 'Category does not exist');
+  }
+}
+
+export class PublishRequirementsNotMetException extends DomainException {
+  constructor() {
+    super(
+      'PUBLISH_REQUIREMENTS_NOT_MET',
+      409,
+      'Video cannot be published without a category',
+    );
+  }
+}
+
+export class InvalidThumbnailException extends DomainException {
+  constructor() {
+    super(
+      'INVALID_THUMBNAIL',
+      400,
+      'Thumbnail must be a valid JPEG, PNG or WebP image',
+    );
+  }
+}
+
+export class ThumbnailTooLargeException extends DomainException {
+  constructor() {
+    super(
+      'THUMBNAIL_TOO_LARGE',
+      413,
+      'Thumbnail exceeds the maximum allowed size',
+    );
+  }
+}
+
+export class ChannelNotFoundException extends DomainException {
+  constructor() {
+    super('CHANNEL_NOT_FOUND', 404, 'Channel not found');
+  }
+}
+
+/** Malformed or tampered opaque pagination cursor (TD-09) — a validation error. */
+export class InvalidPaginationCursorException extends DomainException {
+  constructor() {
+    super('VALIDATION_ERROR', 400, 'Pagination cursor is invalid');
+  }
+}
+
+export class NicknameTakenException extends DomainException {
+  constructor() {
+    super('NICKNAME_TAKEN', 409, 'Nickname is already in use');
+  }
+}
+
+export class NicknameReservedException extends DomainException {
+  constructor() {
+    super('NICKNAME_RESERVED', 409, 'Nickname is reserved');
+  }
+}
+
+export class NicknameChangeCooldownException extends DomainException {
+  constructor() {
+    super(
+      'NICKNAME_CHANGE_COOLDOWN',
+      409,
+      'Nickname can be changed once every 14 days',
+    );
+  }
+}

@@ -21,6 +21,7 @@ import { StorageModule } from '../storage/storage.module';
 import { cleanAllTables } from '../test/create-test-data-source';
 import { User } from '../users/entities/user.entity';
 import { Video } from './entities/video.entity';
+import { Category } from '../categories/entities/category.entity';
 import { VideoAccessService } from './video-access.service';
 import { VideoUploadService } from './video-upload.service';
 
@@ -51,7 +52,14 @@ describe('VideoUploadService (integration)', () => {
           username: process.env.DB_USERNAME,
           password: process.env.DB_PASSWORD,
           database: process.env.DB_NAME,
-          entities: [User, Channel, RefreshToken, VerificationToken, Video],
+          entities: [
+            User,
+            Channel,
+            RefreshToken,
+            VerificationToken,
+            Video,
+            Category,
+          ],
           synchronize: false,
         }),
         TypeOrmModule.forFeature([Video]),
