@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -19,9 +20,11 @@ import { MediaModule } from '../../media/media.module';
 import type { ProcessVideoJobData } from '../../queue/queue.constants';
 import { S3_CLIENTS } from '../../storage/storage.constants';
 import { StorageModule } from '../../storage/storage.module';
+import { StorageService } from '../../storage/storage.service';
 import { cleanAllTables } from '../../test/create-test-data-source';
 import { User } from '../../users/entities/user.entity';
 import { Video } from '../entities/video.entity';
+import { Category } from '../../categories/entities/category.entity';
 import { generatePublicId } from '../public-id.util';
 import { STORAGE_KEYS } from '../videos.constants';
 import { VideoProcessingProcessor } from './video-processing.processor';
@@ -54,7 +57,14 @@ describe('VideoProcessingProcessor (integration)', () => {
           username: process.env.DB_USERNAME,
           password: process.env.DB_PASSWORD,
           database: process.env.DB_NAME,
-          entities: [User, Channel, RefreshToken, VerificationToken, Video],
+          entities: [
+            User,
+            Channel,
+            RefreshToken,
+            VerificationToken,
+            Video,
+            Category,
+          ],
           synchronize: false,
         }),
         TypeOrmModule.forFeature([Video]),
@@ -91,6 +101,7 @@ describe('VideoProcessingProcessor (integration)', () => {
       channel_id: channelId,
       public_id: generatePublicId(),
       file_name: fixture,
+      title: fixture,
       file_size: 1,
       content_type: 'video/mp4',
       original_key: 'pending',
@@ -136,13 +147,129 @@ describe('VideoProcessingProcessor (integration)', () => {
       video_codec: 'h264',
       audio_codec: 'aac',
       video_key: STORAGE_KEYS.video(video.id),
-      thumbnail_key: STORAGE_KEYS.thumbnail(video.id),
       failure_reason: null,
     });
+    expect(found.thumbnail_key).toMatch(
+      new RegExp(`^thumbnails/${video.id}/[A-Za-z0-9_-]{16}\\.jpg$`),
+    );
     expect(found.duration_seconds).toBeCloseTo(2, 0);
     await expect(exists(STORAGE_KEYS.video(video.id))).resolves.toBe(true);
-    await expect(exists(STORAGE_KEYS.thumbnail(video.id))).resolves.toBe(true);
+    await expect(exists(found.thumbnail_key!)).resolves.toBe(true);
     await expect(exists(video.original_key)).resolves.toBe(false);
+  }, 60000);
+
+  it('should generate a different versioned thumbnail key per write', () => {
+    const videoId = '00000000-0000-0000-0000-000000000001';
+
+    expect(STORAGE_KEYS.thumbnail(videoId)).not.toBe(
+      STORAGE_KEYS.thumbnail(videoId),
+    );
+  });
+
+  it('should keep a custom thumbnail when has_custom_thumbnail is true', async () => {
+    const video = await seedProcessing('sample.mp4');
+    const customKey = STORAGE_KEYS.thumbnail(video.id);
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: customKey,
+        Body: 'custom-thumbnail',
+        ContentType: 'image/jpeg',
+      }),
+    );
+    await dataSource.getRepository(Video).update(video.id, {
+      thumbnail_key: customKey,
+      has_custom_thumbnail: true,
+    });
+
+    await run(video.id);
+
+    const found = await dataSource
+      .getRepository(Video)
+      .findOneByOrFail({ id: video.id });
+    expect(found).toMatchObject({
+      processing_status: 'ready',
+      thumbnail_key: customKey,
+      has_custom_thumbnail: true,
+    });
+    await expect(exists(customKey)).resolves.toBe(true);
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: customKey }));
+  }, 60000);
+
+  it('should keep a custom thumbnail uploaded while processing and discard its own auto thumbnail', async () => {
+    const video = await seedProcessing('sample.mp4');
+    const customKey = STORAGE_KEYS.thumbnail(video.id);
+    const storage = module.get<StorageService>(StorageService);
+    const realUpload = storage.uploadFile.bind(
+      storage,
+    ) as StorageService['uploadFile'];
+    const upload = jest.spyOn(storage, 'uploadFile');
+    // Simulates PUT /videos/:id/thumbnail landing after the job read has_custom_thumbnail=false.
+    upload.mockImplementation(
+      async (path: string, key: string, contentType: string) => {
+        await realUpload(path, key, contentType);
+        if (key.startsWith('thumbnails/')) {
+          await s3.send(
+            new PutObjectCommand({
+              Bucket: bucket,
+              Key: customKey,
+              Body: 'custom-thumbnail',
+            }),
+          );
+          await dataSource.getRepository(Video).update(video.id, {
+            thumbnail_key: customKey,
+            has_custom_thumbnail: true,
+          });
+        }
+      },
+    );
+    const deleteObject = jest.spyOn(storage, 'deleteObject');
+
+    try {
+      await run(video.id);
+    } finally {
+      upload.mockRestore();
+    }
+
+    const found = await dataSource
+      .getRepository(Video)
+      .findOneByOrFail({ id: video.id });
+    expect(found).toMatchObject({
+      processing_status: 'ready',
+      video_key: STORAGE_KEYS.video(video.id),
+      thumbnail_key: customKey,
+      has_custom_thumbnail: true,
+    });
+    const autoKey = deleteObject.mock.calls
+      .map(([key]) => key)
+      .find((key) => key.startsWith('thumbnails/'));
+    expect(autoKey).toBeDefined();
+    expect(autoKey).not.toBe(customKey);
+    await expect(exists(autoKey!)).resolves.toBe(false);
+    await expect(exists(customKey)).resolves.toBe(true);
+    expect(deleteObject).not.toHaveBeenCalledWith(customKey);
+    deleteObject.mockRestore();
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: customKey }));
+  }, 60000);
+
+  it('should replace an auto thumbnail with a new key and delete the previous object on reprocessing', async () => {
+    const video = await seedProcessing('sample.mp4');
+    const previousKey = STORAGE_KEYS.thumbnail(video.id);
+    await s3.send(
+      new PutObjectCommand({ Bucket: bucket, Key: previousKey, Body: 'old' }),
+    );
+    await dataSource
+      .getRepository(Video)
+      .update(video.id, { thumbnail_key: previousKey });
+
+    await run(video.id);
+
+    const found = await dataSource
+      .getRepository(Video)
+      .findOneByOrFail({ id: video.id });
+    expect(found.thumbnail_key).not.toBe(previousKey);
+    await expect(exists(found.thumbnail_key!)).resolves.toBe(true);
+    await expect(exists(previousKey)).resolves.toBe(false);
   }, 60000);
 
   it('should fail a non-video file with NO_VIDEO_STREAM without retrying', async () => {

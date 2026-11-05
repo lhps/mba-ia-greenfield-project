@@ -299,6 +299,9 @@ _Subprojects in scope:_
 
 **Decision:** A — `[a-z0-9_]` allowlist with `user_<8-char-random>` fallback when the prefix yields an empty string.
 
+**Revisions:**
+- 2026-11-04 — Generated handles are padded/truncated to 3–30 chars, and a handle that matches the reserved route-word list falls back to `user_<8-char-random>`; already-created handles are unchanged. Implemented in Phase 04 (see phase-04-channel-management/TD-11). Rationale: ICC-2 resolved in /plan-resolve 04 — align generation with the Phase 04 nickname edit rules.
+
 ---
 
 ## Decisions Summary

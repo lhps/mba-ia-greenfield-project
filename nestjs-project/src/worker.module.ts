@@ -18,6 +18,7 @@ import { QUEUES } from './queue/queue.constants';
 import { StorageModule } from './storage/storage.module';
 import { User } from './users/entities/user.entity';
 import { Video } from './videos/entities/video.entity';
+import { Category } from './categories/entities/category.entity';
 import { StaleUploadReconciliationProcessor } from './videos/processing/stale-upload-reconciliation.processor';
 import { StaleUploadReconciliationService } from './videos/processing/stale-upload-reconciliation.service';
 import { VideoProcessingProcessor } from './videos/processing/video-processing.processor';
@@ -55,7 +56,7 @@ import { VideoProcessingService } from './videos/processing/video-processing.ser
         synchronize: false,
       }),
     }),
-    TypeOrmModule.forFeature([Video, Channel, User]),
+    TypeOrmModule.forFeature([Video, Channel, User, Category]),
     QueueModule,
     BullModule.registerQueue(
       { name: QUEUES.VIDEO_PROCESSING },

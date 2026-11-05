@@ -11,8 +11,16 @@ import { AuthModule } from './auth.module';
 import { RefreshToken } from './entities/refresh-token.entity';
 import { VerificationToken } from './entities/verification-token.entity';
 import { Video } from '../videos/entities/video.entity';
+import { Category } from '../categories/entities/category.entity';
 
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
+const ALL_ENTITIES = [
+  User,
+  Channel,
+  RefreshToken,
+  VerificationToken,
+  Video,
+  Category,
+];
 
 describe('AuthModule', () => {
   it('should compile successfully with JwtModule, TypeOrmModule, UsersModule, and MailModule', async () => {

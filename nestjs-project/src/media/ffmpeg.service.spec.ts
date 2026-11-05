@@ -102,4 +102,28 @@ describe('FfmpegService', () => {
     );
     expect(args.indexOf('-ss')).toBeLessThan(args.indexOf('-i'));
   });
+
+  it('should decode strictly and scale-crop a single frame to 1280x720 without metadata', async () => {
+    runner.run.mockResolvedValue({ stdout: '', stderr: '' });
+    await service.normalizeThumbnail('in.png', 'out.jpg');
+
+    const [cmd, args] = runner.run.mock.calls[0] as [string, string[]];
+    expect(cmd).toBe('ffmpeg');
+    expect(args).toEqual(
+      expect.arrayContaining([
+        '-xerror',
+        '-err_detect',
+        'explode',
+        '-frames:v',
+        '1',
+        '-map_metadata',
+        '-1',
+      ]),
+    );
+    expect(args[args.indexOf('-vf') + 1]).toContain(
+      'force_original_aspect_ratio=increase,crop=1280:720',
+    );
+    expect(args.indexOf('-xerror')).toBeLessThan(args.indexOf('-i'));
+    expect(args[args.length - 1]).toBe('out.jpg');
+  });
 });

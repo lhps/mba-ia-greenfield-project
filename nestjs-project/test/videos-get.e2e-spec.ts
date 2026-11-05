@@ -1,5 +1,7 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import request from 'supertest';
+import { presignedRequest } from '../src/test/presigned-request';
+import { STORAGE_KEYS } from '../src/videos/videos.constants';
 import {
   createConfirmedUser,
   createVideosApp,
@@ -12,6 +14,12 @@ type VideoBody = { created_at: string; thumbnail_url: string };
 type ErrorBody = { error: string };
 
 const OWNER = 'get_owner@example.com';
+
+/** Anonymous reads require a published video since Phase 04 (drafts are owner-only). */
+const PUBLISHED = {
+  publication_status: 'published',
+  published_at: new Date('2026-11-04T08:00:00Z'),
+} as const;
 
 describe('videos-get', () => {
   let ctx: VideosE2eContext;
@@ -39,19 +47,33 @@ describe('videos-get', () => {
     await createConfirmedUser(ctx.app, OWNER);
   });
 
-  async function seedReady() {
+  /** Defaults to a legacy Phase 03 thumbnail key (`videos/{id}/thumbnail.jpg`). */
+  async function seedReady(
+    thumbnailKeyFor: (videoId: string) => string = (videoId) =>
+      `videos/${videoId}/thumbnail.jpg`,
+  ) {
     const video = await seedVideo(ctx, OWNER, {
+      ...PUBLISHED,
       processing_status: 'ready',
       duration_seconds: 2.0,
       width: 320,
       height: 240,
     });
-    const thumbnailKey = `videos/${video.id}/thumbnail.jpg`;
+    const thumbnailKey = thumbnailKeyFor(video.id);
     await s3.send(
       new PutObjectCommand({
         Bucket: process.env.S3_BUCKET,
         Key: thumbnailKey,
         Body: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+        ContentType: 'image/jpeg',
+      }),
+    );
+    await s3.send(
+      new PutObjectCommand({
+        Bucket: process.env.S3_BUCKET,
+        Key: `videos/${video.id}/video.mp4`,
+        Body: Buffer.from('mp4'),
+        ContentType: 'video/mp4',
       }),
     );
     await ctx.dataSource.query(
@@ -75,7 +97,7 @@ describe('videos-get', () => {
       public_id: video.public_id,
       file_name: 'clip.mov',
       processing_status: 'ready',
-      publication_status: 'draft',
+      publication_status: 'published',
       duration_seconds: 2,
       width: 320,
       height: 240,
@@ -87,8 +109,39 @@ describe('videos-get', () => {
     );
   });
 
+  test('thumbnail-versionada-retorna-url-publica-estavel-e-legivel-anonimamente', async () => {
+    const video = await seedReady((videoId) => STORAGE_KEYS.thumbnail(videoId));
+
+    const res = await get(video.public_id).expect(200);
+
+    const { thumbnail_url } = res.body as VideoBody;
+    const publicPrefix = `${process.env.S3_PUBLIC_ENDPOINT}/${process.env.S3_BUCKET}/thumbnails/${video.id}/`;
+    expect(thumbnail_url.startsWith(publicPrefix)).toBe(true);
+    expect(thumbnail_url).toMatch(/\.jpg$/);
+    expect(thumbnail_url).not.toContain('X-Amz-Signature');
+    const thumbnail = await presignedRequest(thumbnail_url);
+    expect(thumbnail.status).toBe(200);
+    expect(thumbnail.headers['content-type']).toBe('image/jpeg');
+    const videoObject = await presignedRequest(
+      `${process.env.S3_PUBLIC_ENDPOINT}/${process.env.S3_BUCKET}/videos/${video.id}/video.mp4`,
+    );
+    expect(videoObject.status).toBe(403);
+  });
+
+  test('thumbnail-legada-retorna-url-pre-assinada-funcional', async () => {
+    const video = await seedReady();
+
+    const res = await get(video.public_id).expect(200);
+
+    const { thumbnail_url } = res.body as VideoBody;
+    expect(thumbnail_url).toContain('X-Amz-Signature');
+    const thumbnail = await presignedRequest(thumbnail_url);
+    expect(thumbnail.status).toBe(200);
+  });
+
   test('video-em-processamento-retorna-metadados-nulos', async () => {
     const video = await seedVideo(ctx, OWNER, {
+      ...PUBLISHED,
       processing_status: 'processing',
     });
 

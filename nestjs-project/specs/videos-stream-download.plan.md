@@ -10,19 +10,19 @@ target_file: test/videos-stream-download.e2e-spec.ts
 
 ## Application Overview
 
-Reprodução e download entregues por URLs presignadas de curta duração para o MP4 processado (faststart): o storage serve os bytes com suporte nativo a HTTP `Range` (seek sem baixar o arquivo inteiro) e API/BFF nunca fazem streaming de mídia. `GET /videos/:id/stream` é público (aberto pela URL única na Fase 03) e só funciona para vídeos `ready`. `GET /videos/:id/download` é exclusivo do dono e devolve uma URL do mesmo objeto processado com `Content-Disposition: attachment`.
+Reprodução e download entregues por URLs presignadas de curta duração para o MP4 processado (faststart): o storage serve os bytes com suporte nativo a HTTP `Range` (seek sem baixar o arquivo inteiro) e API/BFF nunca fazem streaming de mídia. `GET /videos/:id/stream` é público para vídeos publicados (aberto pela URL única; desde a Fase 04 o rascunho é só do dono — ver `videos-read-access.plan.md`) e só funciona para vídeos `ready`. `GET /videos/:id/download` é exclusivo do dono e devolve uma URL do mesmo objeto processado com `Content-Disposition: attachment`.
 
 ## Test Scenarios
 
 ### 1. Streaming por URL única
 
-**Setup:** `beforeAll` cria o app a partir de `AppModule` reproduzindo a config global do `main.ts`; `beforeEach` trunca `videos`, `channels`, `users` (e tabelas de tokens) e esvazia o bucket de teste; helpers criam usuário A (dono) e B confirmados com canais e tokens via `POST /auth/login`; helper `seedReadyVideo()` insere linha `ready` do usuário A com `file_name = 'clip.mov'` e grava `test/fixtures/sample.mp4` em `video_key` via `StorageService.uploadFile`; `seedProcessingVideo()` insere linha `processing` sem `video_key`. Requisições às URLs presignadas reescrevem o host público para o endpoint interno no cliente de teste.
+**Setup:** `beforeAll` cria o app a partir de `AppModule` reproduzindo a config global do `main.ts`; `beforeEach` trunca `videos`, `channels`, `users` (e tabelas de tokens) e esvazia o bucket de teste; helpers criam usuário A (dono) e B confirmados com canais e tokens via `POST /auth/login`; helper `seedReadyVideo()` insere linha `ready` e `published` (com `published_at`) do usuário A com `file_name = 'clip.mov'` e grava `test/fixtures/sample.mp4` em `video_key` via `StorageService.uploadFile`; `seedProcessingVideo()` insere linha `processing` e `published` sem `video_key`. Requisições às URLs presignadas reescrevem o host público para o endpoint interno no cliente de teste.
 
 #### 1.1. stream-anonimo-de-video-pronto-suporta-range
 
 **Covers AC:** #1
 **Source:** auto
-**Last sync:** 2026-11-03T22:17:02Z
+**Last sync:** 2026-11-04T13:29:24Z
 
 **Steps:**
   1. GET /videos/<public_id>/stream sem header `Authorization`
@@ -34,7 +34,7 @@ Reprodução e download entregues por URLs presignadas de curta duração para o
 
 **Covers AC:** #2
 **Source:** auto
-**Last sync:** 2026-11-03T22:17:02Z
+**Last sync:** 2026-11-04T13:29:24Z
 
 **Steps:**
   1. Seed de vídeo `processing`; GET /videos/<public_id>/stream

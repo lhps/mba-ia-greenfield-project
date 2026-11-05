@@ -86,6 +86,17 @@ describe('VideoUploadService', () => {
     expect(result.part_size).toBe(PART);
   });
 
+  it('should create the draft with a title derived from the file name', async () => {
+    await service.initiate('user-1', { ...dto, file_name: 'Minha viagem.mp4' });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        file_name: 'Minha viagem.mp4',
+        title: 'Minha viagem',
+      }),
+    );
+  });
+
   it('should reject a declared size above the limit without touching storage', async () => {
     await expect(
       service.initiate('user-1', { ...dto, file_size: 10 * PART + 1 }),

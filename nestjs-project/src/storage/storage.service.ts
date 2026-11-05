@@ -149,6 +149,12 @@ export class StorageService {
     return this.withExpiry(url, expiresIn);
   }
 
+  /** Stable unsigned URL; readable anonymously only for keys under `PUBLIC_READ_PREFIX`. */
+  publicObjectUrl(key: string): string {
+    const endpoint = this.storage.publicEndpoint.replace(/\/+$/, '');
+    return `${endpoint}/${this.storage.bucket}/${key}`;
+  }
+
   async downloadToFile(key: string, path: string): Promise<void> {
     const { Body } = await this.internalClient.send(
       new GetObjectCommand({ Bucket: this.storage.bucket, Key: key }),

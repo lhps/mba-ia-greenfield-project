@@ -8,16 +8,21 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Category } from '../../categories/entities/category.entity';
 import { Channel } from '../../channels/entities/channel.entity';
 import {
   PROCESSING_STATUS,
   PUBLICATION_STATUS,
+  VISIBILITY,
   type ProcessingStatus,
   type PublicationStatus,
+  type Visibility,
 } from '../videos.constants';
 
 @Entity('videos')
 @Index(['processing_status', 'created_at'])
+@Index(['channel_id', 'created_at'])
+@Index(['channel_id', 'published_at', 'public_id'])
 export class Video {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -31,6 +36,16 @@ export class Video {
 
   @Column({ type: 'varchar', length: 255 })
   file_name: string;
+
+  @Column({ type: 'varchar', length: 100 })
+  title: string;
+
+  @Column({ type: 'text', nullable: true })
+  description: string | null;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true })
+  category_id: string | null;
 
   @Column({
     type: 'bigint',
@@ -58,6 +73,16 @@ export class Video {
   })
   publication_status: PublicationStatus;
 
+  @Column({
+    type: 'enum',
+    enum: Object.values(VISIBILITY),
+    default: VISIBILITY.PUBLIC,
+  })
+  visibility: Visibility;
+
+  @Column({ type: 'timestamptz', nullable: true })
+  published_at: Date | null;
+
   @Column({ type: 'varchar', nullable: true })
   upload_id: string | null;
 
@@ -69,6 +94,18 @@ export class Video {
 
   @Column({ type: 'varchar', nullable: true })
   thumbnail_key: string | null;
+
+  @Column({ type: 'boolean', default: false })
+  has_custom_thumbnail: boolean;
+
+  @Column({ type: 'integer', default: 0 })
+  view_count: number;
+
+  @Column({ type: 'integer', default: 0 })
+  like_count: number;
+
+  @Column({ type: 'integer', default: 0 })
+  comment_count: number;
 
   @Column({
     type: 'numeric',
@@ -108,4 +145,11 @@ export class Video {
   })
   @JoinColumn({ name: 'channel_id' })
   channel: Channel;
+
+  @ManyToOne(() => Category, (category) => category.videos, {
+    nullable: true,
+    onDelete: 'RESTRICT',
+  })
+  @JoinColumn({ name: 'category_id' })
+  category: Category | null;
 }
