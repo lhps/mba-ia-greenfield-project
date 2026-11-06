@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import type { ConfigType } from '@nestjs/config';
 import { ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { DomainExceptionFilter } from './common/filters/domain-exception.filter';
@@ -11,7 +12,9 @@ import { buildSwaggerDocument } from './swagger/swagger-document';
 import swaggerMetadata from './metadata.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // The API sits behind exactly one proxy (the Next BFF): req.ip is the last X-Forwarded-For entry.
+  app.set('trust proxy', 1);
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port') ?? 3000;
 

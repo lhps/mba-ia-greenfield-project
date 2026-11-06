@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, type SelectQueryBuilder } from 'typeorm';
 import { ChannelsService } from '../channels/channels.service';
 import type { PanelVideoDto, PanelVideoPageDto } from './dto/panel-video.dto';
 import type {
@@ -13,6 +13,7 @@ import { ThumbnailUrlResolver } from './thumbnail-url.resolver';
 import {
   PROCESSING_STATUS,
   PUBLICATION_STATUS,
+  SUGGESTIONS_LIMIT,
   VISIBILITY,
 } from './videos.constants';
 
@@ -115,6 +116,62 @@ export class VideoListingService {
           })
         : null,
     };
+  }
+
+  /**
+   * Watch-page sidebar (phase-05 TD-02): the most viewed eligible videos of
+   * the current video's category (recency breaks ties), topped up with the
+   * most recent eligible videos of other categories, up to SUGGESTIONS_LIMIT.
+   * A current video without category (only the owner's own draft) gets the
+   * most recent eligible videos of any category.
+   */
+  async listSuggestions(current: Video): Promise<PublicVideoDto[]> {
+    const picked: Video[] = [];
+
+    if (current.category_id) {
+      picked.push(
+        ...(await this.suggestionCandidates(current)
+          .andWhere('video.category_id = :categoryId', {
+            categoryId: current.category_id,
+          })
+          .orderBy('video.view_count', 'DESC')
+          .addOrderBy('video.published_at', 'DESC')
+          .addOrderBy('video.public_id', 'DESC')
+          .limit(SUGGESTIONS_LIMIT)
+          .getMany()),
+      );
+    }
+
+    if (picked.length < SUGGESTIONS_LIMIT) {
+      const fill = this.suggestionCandidates(current)
+        .orderBy('video.published_at', 'DESC')
+        .addOrderBy('video.public_id', 'DESC')
+        .limit(SUGGESTIONS_LIMIT - picked.length);
+      if (current.category_id) {
+        // Every same-category candidate is already picked when the list is short.
+        fill.andWhere('video.category_id IS DISTINCT FROM :categoryId', {
+          categoryId: current.category_id,
+        });
+      }
+      picked.push(...(await fill.getMany()));
+    }
+
+    return Promise.all(picked.map((video) => this.toPublicVideo(video)));
+  }
+
+  /** Published + public + ready videos other than `current` — never drafts or unlisted. */
+  private suggestionCandidates(current: Video): SelectQueryBuilder<Video> {
+    return this.videos
+      .createQueryBuilder('video')
+      .where('video.publication_status = :published', {
+        published: PUBLICATION_STATUS.PUBLISHED,
+      })
+      .andWhere('video.visibility = :public', { public: VISIBILITY.PUBLIC })
+      .andWhere('video.processing_status = :ready', {
+        ready: PROCESSING_STATUS.READY,
+      })
+      .andWhere('video.published_at IS NOT NULL')
+      .andWhere('video.id != :currentId', { currentId: current.id });
   }
 
   private async toPublicVideo(video: Video): Promise<PublicVideoDto> {

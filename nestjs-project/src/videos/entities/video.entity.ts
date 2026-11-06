@@ -23,6 +23,8 @@ import {
 @Index(['processing_status', 'created_at'])
 @Index(['channel_id', 'created_at'])
 @Index(['channel_id', 'published_at', 'public_id'])
+// Suggestions sidebar: same category ordered by view_count, then recency (phase-05 TD-02).
+@Index(['category_id', 'view_count', 'published_at'])
 export class Video {
   @PrimaryGeneratedColumn('uuid')
   id: string;

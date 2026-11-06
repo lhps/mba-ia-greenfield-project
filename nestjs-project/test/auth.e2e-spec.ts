@@ -1,5 +1,6 @@
 import * as crypto from 'crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -31,7 +32,10 @@ describe('Auth (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    const expressApp =
+      moduleFixture.createNestApplication<NestExpressApplication>();
+    expressApp.set('trust proxy', 1);
+    app = expressApp;
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -680,7 +684,10 @@ describe('Rate Limiting (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
-    app = moduleFixture.createNestApplication();
+    const expressApp =
+      moduleFixture.createNestApplication<NestExpressApplication>();
+    expressApp.set('trust proxy', 1);
+    app = expressApp;
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -720,6 +727,45 @@ describe('Rate Limiting (e2e)', () => {
       .post('/auth/forgot-password')
       .send({ email: 'throttle@example.com' })
       .expect(429);
+  });
+
+  describe('client IP behind the BFF (trust proxy = 1)', () => {
+    const credentials = {
+      email: 'nobody@example.com',
+      password: 'password123',
+    };
+
+    async function loginFrom(forwardedFor: string): Promise<number> {
+      const res = await request(app.getHttpServer())
+        .post('/auth/login')
+        .set('X-Forwarded-For', forwardedFor)
+        .send(credentials);
+      return res.status;
+    }
+
+    async function exhaustLimitFrom(forwardedFor: string): Promise<void> {
+      for (let i = 0; i < 10; i++) {
+        expect(await loginFrom(forwardedFor)).toBe(401);
+      }
+    }
+
+    it('returns 429 on the 11th login from the same last X-Forwarded-For entry', async () => {
+      await exhaustLimitFrom('203.0.113.7');
+
+      expect(await loginFrom('203.0.113.7')).toBe(429);
+    });
+
+    it('does not throttle a login from a different last X-Forwarded-For entry', async () => {
+      await exhaustLimitFrom('203.0.113.7');
+
+      expect(await loginFrom('198.51.100.9')).toBe(401);
+    });
+
+    it('ignores forged entries prepended before the last X-Forwarded-For entry', async () => {
+      await exhaustLimitFrom('203.0.113.7');
+
+      expect(await loginFrom('10.9.9.9, 203.0.113.7')).toBe(429);
+    });
   });
 
   it('does not rate-limit the non-auth GET / endpoint', async () => {

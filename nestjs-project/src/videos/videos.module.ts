@@ -44,6 +44,7 @@ import { VideosService } from './videos.service';
     VideoThumbnailService,
     VideoListingService,
   ],
-  exports: [VideoProcessingQueue],
+  // VideoAccessService: read rule reused by view counting in ViewsModule.
+  exports: [VideoProcessingQueue, VideoAccessService],
 })
 export class VideosModule {}

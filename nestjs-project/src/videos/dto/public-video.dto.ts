@@ -22,7 +22,11 @@ export class PublicVideoDto {
   @ApiProperty({ format: 'date-time' })
   published_at: string;
 
-  @ApiProperty({ example: 0, description: 'Always 0 in Phase 04' })
+  @ApiProperty({
+    type: 'integer',
+    example: 0,
+    description: 'Views counted by POST /videos/:id/views',
+  })
   view_count: number;
 }
 
