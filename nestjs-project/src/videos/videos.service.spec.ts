@@ -30,6 +30,13 @@ describe('VideosService', () => {
     file_name: 'clip.mov',
     publication_status: 'draft',
     created_at: new Date('2026-11-03T12:00:00Z'),
+    view_count: 0,
+    channel: {
+      id: 'channel-id',
+      user_id: 'owner-user-id',
+      nickname: 'my-channel',
+      name: 'My Channel',
+    },
   };
 
   beforeEach(() => jest.clearAllMocks());
@@ -51,6 +58,7 @@ describe('VideosService', () => {
         height: 240,
         video_key: 'videos/internal-id/video.mp4',
         thumbnail_key: 'thumbnails/internal-id/v1.jpg',
+        view_count: 42,
       } as unknown as Video;
       thumbnails.resolve.mockResolvedValue('http://s3/thumb');
 
@@ -71,6 +79,8 @@ describe('VideosService', () => {
         height: 240,
         thumbnail_url: 'http://s3/thumb',
         created_at: '2026-11-03T12:00:00.000Z',
+        view_count: 42,
+        channel: { nickname: 'my-channel', name: 'My Channel' },
       });
       expect(thumbnails.resolve).toHaveBeenCalledWith(
         'thumbnails/internal-id/v1.jpg',
@@ -105,6 +115,24 @@ describe('VideosService', () => {
       });
       expect(thumbnails.resolve).toHaveBeenCalledWith(null);
       expect(storage.presignGetObject).not.toHaveBeenCalled();
+    });
+
+    it('should expose only nickname and name of the channel, never its ids', async () => {
+      const video = {
+        ...base,
+        title: 'clip',
+        category: null,
+        published_at: null,
+        thumbnail_key: null,
+      } as unknown as Video;
+      thumbnails.resolve.mockResolvedValue(null);
+
+      const result = await service.toVideoDetail(video);
+
+      expect(Object.keys(result.channel).sort()).toEqual(['name', 'nickname']);
+      expect(result.view_count).toBe(0);
+      expect(JSON.stringify(result)).not.toContain('owner-user-id');
+      expect(JSON.stringify(result)).not.toContain('channel-id');
     });
   });
 

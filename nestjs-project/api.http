@@ -258,3 +258,37 @@ GET {{baseUrl}}/channels/{{channelNickname}}/videos?limit=2
 
 ### 26. Vídeos públicos do canal — próxima página (usa o next_cursor da resposta anterior; null = última página)
 GET {{baseUrl}}/channels/{{channelNickname}}/videos?limit=2&cursor={{nextCursor}}
+
+
+###
+# ─────────────────────────────────────────────
+# PÁGINA DE VISUALIZAÇÃO (Fase 05)
+# ─────────────────────────────────────────────
+# Fluxo: obter vídeo → registrar visualização → repetir (deduplicada) → sugestões → download do dono.
+# Usa @videoId acima; o vídeo precisa estar publicado e com processing_status = ready.
+# A API confia em um único proxy (trust proxy = 1): o IP do espectador é a ÚLTIMA entrada de X-Forwarded-For.
+
+### 27. Obter vídeo (público) — traz view_count e channel { nickname, name }
+# O botão de download só aparece quando channel.nickname = channelSlug da sessão
+GET {{baseUrl}}/videos/{{videoId}}
+
+
+### 28. Registrar visualização (anônimo) — 204; conta 1 vez por IP + User-Agent na janela (padrão 24 h)
+POST {{baseUrl}}/videos/{{videoId}}/views
+X-Forwarded-For: 203.0.113.7
+User-Agent: api-http-demo
+
+
+### 29. Repetir a visualização (mesmo IP e User-Agent) — 204, mas view_count não muda (deduplicada)
+POST {{baseUrl}}/videos/{{videoId}}/views
+X-Forwarded-For: 203.0.113.7
+User-Agent: api-http-demo
+
+
+### 30. Sugestões da sidebar (público) — até 12: mesma categoria por visualizações, completa com recentes
+GET {{baseUrl}}/videos/{{videoId}}/suggestions
+
+
+### 31. Download (somente o dono do canal; outros usuários recebem 403)
+GET {{baseUrl}}/videos/{{videoId}}/download
+Authorization: Bearer {{accessToken}}

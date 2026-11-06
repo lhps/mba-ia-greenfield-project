@@ -35,4 +35,5 @@ export const envValidationSchema = Joi.object({
   UPLOAD_PART_SIZE_BYTES: Joi.number().integer().min(5242880).default(67108864),
   PRESIGNED_URL_TTL_SECONDS: Joi.number().integer().min(1).default(3600),
   STALE_UPLOAD_HOURS: Joi.number().integer().min(1).default(48),
+  VIEW_DEDUP_WINDOW_SECONDS: Joi.number().integer().min(1).default(86400),
 });

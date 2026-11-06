@@ -65,3 +65,25 @@ describe('envValidationSchema — storage, queue and upload', () => {
     expect(error).toBeUndefined();
   });
 });
+
+describe('envValidationSchema — view dedup window', () => {
+  it('should default VIEW_DEDUP_WINDOW_SECONDS to 24 hours', () => {
+    const { value, error } = validate({}) as {
+      value: Record<string, unknown>;
+      error?: Error;
+    };
+
+    expect(error).toBeUndefined();
+    expect(value.VIEW_DEDUP_WINDOW_SECONDS).toBe(86400);
+  });
+
+  it.each(['0', '1.5', 'abc'])(
+    'should reject VIEW_DEDUP_WINDOW_SECONDS=%s',
+    (windowSeconds) => {
+      const { error } = validate({ VIEW_DEDUP_WINDOW_SECONDS: windowSeconds });
+
+      expect(error).toBeDefined();
+      expect(error!.message).toContain('VIEW_DEDUP_WINDOW_SECONDS');
+    },
+  );
+});

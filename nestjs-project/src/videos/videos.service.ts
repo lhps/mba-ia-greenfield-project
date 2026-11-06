@@ -26,7 +26,7 @@ export class VideosService {
   }
 
   /**
-   * Maps a video (with `category` loaded) to the shared `VideoDetail` shape —
+   * Maps a video (with `channel` and `category` loaded) to the shared `VideoDetail` shape —
    * never exposes internal ids, storage keys or upload_id.
    */
   async toVideoDetail(video: Video): Promise<VideoDetailDto> {
@@ -51,6 +51,8 @@ export class VideosService {
       height: video.height,
       thumbnail_url: thumbnailUrl,
       created_at: video.created_at.toISOString(),
+      view_count: video.view_count,
+      channel: { nickname: video.channel.nickname, name: video.channel.name },
     };
   }
 

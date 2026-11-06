@@ -364,4 +364,162 @@ describe('VideoListingService (integration)', () => {
       ).rejects.toBeInstanceOf(InvalidPaginationCursorException);
     });
   });
+
+  describe('listSuggestions', () => {
+    const categoryId = async (slug: string): Promise<string> =>
+      (await dataSource.getRepository(Category).findOneByOrFail({ slug })).id;
+
+    const eligible = (
+      channelId: string,
+      category: string,
+      publishedAt: string,
+      viewCount = 0,
+    ): Partial<Video> & { channel_id: string } => ({
+      channel_id: channelId,
+      processing_status: 'ready',
+      publication_status: 'published',
+      visibility: 'public',
+      category_id: category,
+      published_at: new Date(publishedAt),
+      view_count: viewCount,
+    });
+
+    const seedEligible = async (
+      category: string,
+      publishedAt: string,
+      viewCount = 0,
+    ): Promise<Video> =>
+      seedVideo(
+        otherChannelId,
+        publishedAt,
+        eligible(otherChannelId, category, publishedAt, viewCount),
+      );
+
+    let musica: string;
+    let jogos: string;
+    let current: Video;
+
+    beforeEach(async () => {
+      musica = await categoryId('musica');
+      jogos = await categoryId('jogos');
+      current = await seedVideo(
+        ownerChannelId,
+        '2026-10-01T10:00:00Z',
+        eligible(ownerChannelId, musica, '2026-10-01T10:00:00Z', 100),
+      );
+    });
+
+    const ids = (items: { public_id: string }[]) =>
+      items.map((item) => item.public_id);
+
+    it('should order the same category by view_count, breaking ties by the most recent published_at', async () => {
+      const a = await seedEligible(musica, '2026-11-02T10:00:00Z', 5);
+      const b = await seedEligible(musica, '2026-11-01T10:00:00Z', 9);
+      const c = await seedEligible(musica, '2026-11-03T10:00:00Z', 5);
+
+      const items = await service.listSuggestions(current);
+
+      expect(ids(items)).toEqual([b.public_id, c.public_id, a.public_id]);
+      expect(items[0]).toEqual({
+        public_id: b.public_id,
+        title: 'clip',
+        thumbnail_url: null,
+        duration_seconds: null,
+        published_at: '2026-11-01T10:00:00.000Z',
+        view_count: 9,
+      });
+    });
+
+    it('should fill with the most recent videos of other categories up to 12', async () => {
+      const sameCategory = [
+        await seedEligible(musica, '2026-11-01T10:00:00Z', 3),
+        await seedEligible(musica, '2026-11-02T10:00:00Z', 2),
+        await seedEligible(musica, '2026-11-03T10:00:00Z', 1),
+      ];
+      const others: Video[] = [];
+      for (let day = 1; day <= 15; day++) {
+        others.push(
+          await seedEligible(
+            jogos,
+            `2026-10-${String(day).padStart(2, '0')}T12:00:00Z`,
+            1000,
+          ),
+        );
+      }
+
+      const items = await service.listSuggestions(current);
+
+      const mostRecentOthers = others.slice(-9).reverse();
+      expect(items).toHaveLength(12);
+      expect(ids(items)).toEqual([
+        ...ids(sameCategory),
+        ...ids(mostRecentOthers),
+      ]);
+    });
+
+    it('should exclude the current video, drafts, unlisted and non-ready videos', async () => {
+      const base = eligible(otherChannelId, musica, '2026-11-01T10:00:00Z');
+      const draft = await seedVideo(otherChannelId, '2026-11-01T10:00:00Z', {
+        ...base,
+        publication_status: 'draft',
+      });
+      const unlisted = await seedVideo(otherChannelId, '2026-11-01T10:00:00Z', {
+        ...base,
+        visibility: 'unlisted',
+      });
+      const processing = await seedVideo(
+        otherChannelId,
+        '2026-11-01T10:00:00Z',
+        { ...base, processing_status: 'processing' },
+      );
+      const visible = await seedEligible(musica, '2026-11-02T10:00:00Z');
+
+      const items = await service.listSuggestions(current);
+
+      expect(ids(items)).toEqual([visible.public_id]);
+      expect(ids(items)).not.toEqual(
+        expect.arrayContaining([
+          current.public_id,
+          draft.public_id,
+          unlisted.public_id,
+          processing.public_id,
+        ]),
+      );
+    });
+
+    it('should return the most recent videos of any category when the current video has no category', async () => {
+      const ownDraft = await seedVideo(ownerChannelId, '2026-11-05T10:00:00Z', {
+        processing_status: 'ready',
+        category_id: null,
+      });
+      const older = await seedEligible(jogos, '2026-11-01T10:00:00Z', 50);
+      const newer = await seedEligible(musica, '2026-11-02T10:00:00Z', 1);
+
+      const items = await service.listSuggestions(ownDraft);
+
+      expect(ids(items)).toEqual([
+        newer.public_id,
+        older.public_id,
+        current.public_id,
+      ]);
+    });
+
+    it('should never return more than 12 items', async () => {
+      for (let day = 1; day <= 14; day++) {
+        await seedEligible(
+          musica,
+          `2026-11-${String(day).padStart(2, '0')}T10:00:00Z`,
+          day,
+        );
+      }
+
+      const items = await service.listSuggestions(current);
+
+      expect(items).toHaveLength(12);
+    });
+
+    it('should return an empty list when no other video is eligible', async () => {
+      expect(await service.listSuggestions(current)).toEqual([]);
+    });
+  });
 });

@@ -1,4 +1,5 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { SwaggerModule } from '@nestjs/swagger';
 import request from 'supertest';
@@ -13,7 +14,8 @@ async function createApp(withSwagger: boolean): Promise<INestApplication<App>> {
     imports: [AppModule],
   }).compile();
 
-  const app = moduleFixture.createNestApplication<INestApplication<App>>();
+  const app = moduleFixture.createNestApplication<NestExpressApplication>();
+  app.set('trust proxy', 1);
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -139,6 +141,54 @@ describe('Swagger endpoints (e2e)', () => {
           expect(operation.security).toBeUndefined();
         }
       }
+    });
+
+    it('GET /api/docs-json documents the Phase 05 watch-page operations as public', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const paths = (res.body as Record<string, unknown>).paths as Record<
+        string,
+        Record<
+          string,
+          { security?: unknown[]; responses: Record<string, unknown> }
+        >
+      >;
+
+      const views = paths['/videos/{id}/views']?.post;
+      expect(views).toBeDefined();
+      expect(views.security).toBeUndefined();
+      expect(Object.keys(views.responses).sort()).toEqual([
+        '204',
+        '404',
+        '409',
+      ]);
+
+      const suggestions = paths['/videos/{id}/suggestions']?.get;
+      expect(suggestions).toBeDefined();
+      expect(suggestions.security).toBeUndefined();
+      expect(Object.keys(suggestions.responses).sort()).toEqual(['200', '404']);
+    });
+
+    it('GET /api/docs-json documents view_count and the channel summary on VideoDetailDto', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const schemas = (
+        (res.body as Record<string, unknown>).components as Record<
+          string,
+          Record<string, { properties: Record<string, unknown> }>
+        >
+      ).schemas;
+
+      expect(schemas.VideoDetailDto.properties).toMatchObject({
+        view_count: { type: 'integer' },
+        channel: { $ref: '#/components/schemas/VideoChannelDto' },
+      });
+      expect(Object.keys(schemas.VideoChannelDto.properties).sort()).toEqual([
+        'name',
+        'nickname',
+      ]);
     });
 
     it('GET /api/docs-json documents PUT /videos/{id}/thumbnail as a multipart upload with a required binary file', async () => {

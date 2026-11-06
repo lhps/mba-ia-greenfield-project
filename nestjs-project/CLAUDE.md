@@ -35,6 +35,8 @@ Services:
 - `nestjs-api` — NestJS API, port `3000`
 - `db` — PostgreSQL 17, port `5432`, database `streamtube`, user/password `streamtube`
 
+**Network exposure:** the API trusts exactly one proxy hop (`app.set('trust proxy', 1)` in `main.ts`), so `req.ip` is the last `X-Forwarded-For` entry — the address appended by the Next BFF. In deployment the API must be reachable **only through the BFF**; a client hitting the API directly could set `X-Forwarded-For` and pick its own IP for rate limiting and anonymous view dedup. The published port `3000` is a dev-only exception.
+
 All verification and teardown commands run on the **host machine**:
 
 ```bash

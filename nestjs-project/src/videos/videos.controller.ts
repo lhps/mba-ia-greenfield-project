@@ -37,8 +37,11 @@ import { UploadCompletedDto } from './dto/upload-completed.dto';
 import { UpdateVideoDto } from './dto/update-video.dto';
 import { UploadPartsPresignedDto } from './dto/upload-parts-presigned.dto';
 import { VideoDetailDto } from './dto/video-detail.dto';
+import { VideoSuggestionsDto } from './dto/video-suggestions.dto';
 import { VideoUploadStartedDto } from './dto/video-upload-started.dto';
 import { ThumbnailTooLargeFilter } from './filters/thumbnail-too-large.filter';
+import { VideoAccessService } from './video-access.service';
+import { VideoListingService } from './video-listing.service';
 import { VideoManagementService } from './video-management.service';
 import {
   VideoThumbnailService,
@@ -61,6 +64,8 @@ export class VideosController {
     private readonly videos: VideosService,
     private readonly videoManagement: VideoManagementService,
     private readonly videoThumbnail: VideoThumbnailService,
+    private readonly access: VideoAccessService,
+    private readonly listing: VideoListingService,
   ) {}
 
   @Post()
@@ -190,7 +195,9 @@ export class VideosController {
     description:
       'Returns the VideoDetail shape. Published videos (public or unlisted) are readable by anyone with the link; ' +
       'a draft is readable only by its owner. Optional bearer token: when valid it identifies the owner, ' +
-      'when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id.',
+      'when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id. ' +
+      'Carries `view_count` and the owning `channel { nickname, name }`; the frontend compares `channel.nickname` ' +
+      'with the session channelSlug to decide whether to show the download button.',
   })
   @ApiResponse({ status: 200, type: VideoDetailDto })
   @ApiResponse({
@@ -390,6 +397,32 @@ export class VideosController {
 
   @Public()
   @UseGuards(OptionalJwtAuthGuard)
+  @Get(':id/suggestions')
+  @ApiOperation({
+    summary: 'List watch-page suggestions',
+    description:
+      'Up to 12 published, public and ready videos for the watch-page sidebar (no pagination): the most viewed ' +
+      'of the same category as the current video (most recent first on ties), completed with the most recent ' +
+      'videos from other categories. Never includes the current video, drafts or unlisted videos. The current ' +
+      'video follows the same read rule as GET /videos/:id. `:id` is the video public_id.',
+  })
+  @ApiResponse({ status: 200, type: VideoSuggestionsDto })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Video not found, or the video is a draft and the caller is not its owner',
+    schema: errorSchema,
+  })
+  async listSuggestions(
+    @CurrentUser() user: JwtPayload | undefined,
+    @Param('id') publicId: string,
+  ): Promise<VideoSuggestionsDto> {
+    const current = await this.access.findReadableOrFail(publicId, user?.sub);
+    return { items: await this.listing.listSuggestions(current) };
+  }
+
+  @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':id/stream')
   @ApiOperation({
     summary: 'Get a streaming URL',
@@ -423,7 +456,8 @@ export class VideosController {
     summary: 'Get a download URL',
     description:
       'Returns a short-lived presigned URL to the processed MP4 with an attachment Content-Disposition (owner only). ' +
-      '`:id` is the video public_id.',
+      'The watch page shows the download button only to the channel owner (VideoDetail `channel.nickname` equals ' +
+      'the session channelSlug); anyone else gets 401/403. `:id` is the video public_id.',
   })
   @ApiResponse({ status: 200, type: PresignedUrlResponseDto })
   @ApiResponse({

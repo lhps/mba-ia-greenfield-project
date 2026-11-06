@@ -90,5 +90,8 @@ export const PUBLIC_LISTING_PAGINATION = {
   MAX_LIMIT: 50,
 } as const;
 
+/** Size of the watch-page suggestions sidebar — no pagination (phase-05 TD-02). */
+export const SUGGESTIONS_LIMIT = 12;
+
 /** Every stored thumbnail is a re-encoded JPEG (TD-06). */
 export const THUMBNAIL_CONTENT_TYPE = 'image/jpeg';

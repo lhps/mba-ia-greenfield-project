@@ -16,6 +16,19 @@ export class VideoCategoryDto {
   name: string;
 }
 
+/** Public summary of the owning channel — no internal ids. */
+export class VideoChannelDto {
+  @ApiProperty({
+    example: 'my-channel',
+    description:
+      'Channel handle; the frontend compares it with the session channelSlug to show the download button',
+  })
+  nickname: string;
+
+  @ApiProperty({ example: 'My Channel' })
+  name: string;
+}
+
 /** Shared `VideoDetail` shape — never carries internal ids or storage keys. */
 export class VideoDetailDto {
   @ApiProperty({ example: 'dQw4w9WgXcQ' })
@@ -64,4 +77,10 @@ export class VideoDetailDto {
 
   @ApiProperty({ format: 'date-time' })
   created_at: string;
+
+  @ApiProperty({ type: 'integer', example: 0 })
+  view_count: number;
+
+  @ApiProperty({ type: VideoChannelDto })
+  channel: VideoChannelDto;
 }
