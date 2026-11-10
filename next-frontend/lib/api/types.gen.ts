@@ -200,16 +200,613 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/channels/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get my channel profile
+         * @description Returns the caller's channel: nickname, name, description, the last nickname change and when the 14-day nickname cooldown ends (null when a change is allowed now).
+         */
+        get: operations["ChannelsController_getMine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit my channel profile
+         * @description Partially updates nickname, name and/or description and returns the updated channel (so the client can refresh its channel slug). A new nickname must match ^[a-z0-9_]{3,30}$, not be reserved or taken, and can change once every 14 days; submitting the current nickname is a no-op.
+         */
+        patch: operations["ChannelsController_updateMine"];
+        trace?: never;
+    };
+    "/channels/{nickname}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a public channel page header
+         * @description Returns the public information of the channel with this nickname (case-insensitive): nickname, name, description and creation date. Anonymous access.
+         */
+        get: operations["ChannelsController_getByNickname"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a video upload
+         * @description Pre-registers the video as a draft under the caller channel and opens a multipart upload. Bytes are sent directly to storage through presigned part URLs.
+         */
+        post: operations["VideosController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/upload/parts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Presign upload part URLs
+         * @description Issues presigned UploadPart URLs for the requested part numbers (owner only, while uploading). Can be called again to resume failed parts. `:id` is the video public_id.
+         */
+        post: operations["VideosController_presignParts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/upload/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete a video upload
+         * @description Completes the multipart upload, verifies the stored size and enqueues background processing (owner only, while uploading). `:id` is the video public_id.
+         */
+        post: operations["VideosController_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a video by its unique URL id
+         * @description Returns the VideoDetail shape. Published videos (public or unlisted) are readable by anyone with the link; a draft is readable only by its owner. Optional bearer token: when valid it identifies the owner, when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id. Carries `view_count` and the owning `channel { nickname, name }`; the frontend compares `channel.nickname` with the session channelSlug to decide whether to show the download button.
+         */
+        get: operations["VideosController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Edit video information
+         * @description Partially updates title, description, category (by slug) and visibility (owner only). At least one field is required; `null` clears description or category. Visibility is independent of publication. `:id` is the video public_id.
+         */
+        patch: operations["VideosController_update"];
+        trace?: never;
+    };
+    "/videos/{id}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a video
+         * @description Moves the video from draft to published (owner only). Requires processing_status `ready` and a category. `published_at` is set on the first publication and kept on later re-publications. Idempotent: an already published video is returned unchanged. `:id` is the video public_id.
+         */
+        post: operations["VideosController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/unpublish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Unpublish a video
+         * @description Moves the video back to draft (owner only), keeping `published_at`. Idempotent: a draft is returned unchanged. `:id` is the video public_id.
+         */
+        post: operations["VideosController_unpublish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the video thumbnail
+         * @description Uploads a custom thumbnail (owner only). The image is re-encoded to a 1280×720 JPEG (scaled and center-cropped, metadata dropped), stored under a new versioned public URL, and the previous thumbnail is deleted. Later processing never overwrites a custom thumbnail. `:id` is the video public_id.
+         */
+        put: operations["VideosController_replaceThumbnail"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List watch-page suggestions
+         * @description Up to 12 published, public and ready videos for the watch-page sidebar (no pagination): the most viewed of the same category as the current video (most recent first on ties), completed with the most recent videos from other categories. Never includes the current video, drafts or unlisted videos. The current video follows the same read rule as GET /videos/:id. `:id` is the video public_id.
+         */
+        get: operations["VideosController_listSuggestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a streaming URL
+         * @description Returns a short-lived presigned URL to the processed faststart MP4; storage serves HTTP Range for seeking. Same read rule as GET /videos/:id: published videos for anyone with the link, drafts owner-only. Optional bearer token identifies the owner. `:id` is the video public_id.
+         */
+        get: operations["VideosController_stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a download URL
+         * @description Returns a short-lived presigned URL to the processed MP4 with an attachment Content-Disposition (owner only). The watch page shows the download button only to the channel owner (VideoDetail `channel.nickname` equals the session channelSlug); anyone else gets 401/403. `:id` is the video public_id.
+         */
+        get: operations["VideosController_download"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/me/videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List my channel videos (management panel)
+         * @description Lists every video of the caller's channel — drafts, published, processing and failed — newest first by created_at, with offset pagination (page/per_page) and the total count.
+         */
+        get: operations["ChannelVideosController_listMine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/channels/{nickname}/videos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List a channel public videos
+         * @description Lists only published, public and ready videos of the channel — drafts and unlisted videos never appear, not even for the owner — newest published_at first, with keyset pagination: pass the previous `next_cursor` as `cursor` (null on the last page).
+         */
+        get: operations["ChannelVideosController_listPublic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List video categories
+         * @description Returns the fixed catalog of video categories ordered by name. The slug is the identifier used when editing a video.
+         */
+        get: operations["CategoriesController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/videos/{id}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a video view
+         * @description Called by the player when playback starts. Counts at most one view per viewer per dedup window (VIEW_DEDUP_WINDOW_SECONDS, default 24 h): the viewer is the user id when a valid bearer token is sent, otherwise a hash of the client IP (last X-Forwarded-For entry) and User-Agent. Views by the channel owner are never counted. Always 204 — counted, deduplicated or skipped. `:id` is the video public_id.
+         */
+        post: operations["VideoViewsController_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        RegisterDto: Record<string, never>;
-        ResendConfirmationDto: Record<string, never>;
-        LoginDto: Record<string, never>;
-        RefreshTokenDto: Record<string, never>;
-        ForgotPasswordDto: Record<string, never>;
-        ResetPasswordDto: Record<string, never>;
+        RegisterDto: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        ResendConfirmationDto: {
+            /** Format: email */
+            email: string;
+        };
+        LoginDto: {
+            /** Format: email */
+            email: string;
+            password: string;
+        };
+        RefreshTokenDto: {
+            refresh_token: string;
+        };
+        ForgotPasswordDto: {
+            /** Format: email */
+            email: string;
+        };
+        ResetPasswordDto: {
+            token: string;
+            new_password: string;
+        };
+        ChannelProfileDto: {
+            /** @example novo_canal */
+            nickname: string;
+            /** @example Meu Canal */
+            name: string;
+            description: string | null;
+            /** Format: date-time */
+            nickname_changed_at: string | null;
+            /**
+             * Format: date-time
+             * @description When the 14-day nickname cooldown ends; null when a change is allowed now
+             */
+            next_nickname_change_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        UpdateChannelDto: {
+            /**
+             * @description New handle; lowercased, `^[a-z0-9_]{3,30}$`, not reserved, unique.
+             *     Can change once every 14 days; sending the current nickname is a no-op.
+             * @example novo_canal
+             */
+            nickname?: string;
+            /** @description New display name; trimmed, 1–50 characters. */
+            name?: string;
+            /** @description New description (≤ 1000 characters); `null` clears it. */
+            description?: string | null;
+        };
+        PublicChannelDto: {
+            /** @example novo_canal */
+            nickname: string;
+            /** @example Meu Canal */
+            name: string;
+            description: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        CreateVideoUploadDto: {
+            /** @description Original file name of the video being uploaded. */
+            file_name: string;
+            /** @description Declared size in bytes; must not exceed MAX_UPLOAD_BYTES (10 GiB by default). */
+            file_size: number;
+            /**
+             * @description Declared MIME type of the video.
+             * @enum {string}
+             */
+            content_type: "video/mp4" | "video/quicktime" | "video/webm" | "video/x-matroska" | "video/x-msvideo";
+        };
+        VideoUploadStartedDto: {
+            /** @example dQw4w9WgXcQ */
+            public_id: string;
+            /** @enum {string} */
+            processing_status: "uploading";
+            /** @enum {string} */
+            publication_status: "draft" | "published";
+            /**
+             * @description Bytes per part (last part may be smaller)
+             * @example 67108864
+             */
+            part_size: number;
+            /** @example 3 */
+            part_count: number;
+        };
+        RequestUploadPartsDto: {
+            /** @description Part numbers (1-based) to presign; at most 100 per request. */
+            part_numbers: number[];
+        };
+        PresignedPartDto: {
+            /** @example 1 */
+            part_number: number;
+            /** @description Presigned UploadPart URL — PUT the raw part bytes; read the ETag response header */
+            url: string;
+        };
+        UploadPartsPresignedDto: {
+            parts: components["schemas"]["PresignedPartDto"][];
+            /** Format: date-time */
+            expires_at: string;
+        };
+        UploadedPartDto: {
+            /** @description 1-based part number. */
+            part_number: number;
+            /** @description ETag returned by storage for this part's PUT. */
+            etag: string;
+        };
+        CompleteUploadDto: {
+            /** @description Every uploaded part (exactly part_count items, unique part_number). */
+            parts: components["schemas"]["UploadedPartDto"][];
+        };
+        UploadCompletedDto: {
+            /** @example dQw4w9WgXcQ */
+            public_id: string;
+            /** @enum {string} */
+            processing_status: "processing";
+        };
+        VideoCategoryDto: {
+            /** @example musica */
+            slug: string;
+            /** @example Música */
+            name: string;
+        };
+        VideoChannelDto: {
+            /**
+             * @description Channel handle; the frontend compares it with the session channelSlug to show the download button
+             * @example my-channel
+             */
+            nickname: string;
+            /** @example My Channel */
+            name: string;
+        };
+        VideoDetailDto: {
+            /** @example dQw4w9WgXcQ */
+            public_id: string;
+            /** @example My trip to the beach */
+            title: string;
+            description: string | null;
+            category: components["schemas"]["VideoCategoryDto"] | null;
+            /** @example clip.mp4 */
+            file_name: string;
+            /** @enum {string} */
+            processing_status: "uploading" | "processing" | "ready" | "failed";
+            /** @enum {string} */
+            publication_status: "draft" | "published";
+            /** @enum {string} */
+            visibility: "public" | "unlisted";
+            /** Format: date-time */
+            published_at: string | null;
+            /** @example 2.04 */
+            duration_seconds: number | null;
+            /** @example 1920 */
+            width: number | null;
+            /** @example 1080 */
+            height: number | null;
+            /** @description Stable public URL (thumbnails/ prefix), presigned GET for legacy keys, or null */
+            thumbnail_url: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @example 0 */
+            view_count: number;
+            channel: components["schemas"]["VideoChannelDto"];
+        };
+        UpdateVideoDto: {
+            /** @description New title; trimmed, 1–100 characters. */
+            title?: string;
+            /** @description New description (≤ 5000 characters); `null` clears it. */
+            description?: string | null;
+            /** @description Category `slug` (see GET /categories); `null` clears it — rejected on a published video. */
+            category?: string | null;
+            /**
+             * @description `public` or `unlisted`; editable at any time, independent of publication.
+             * @enum {string}
+             */
+            visibility?: "public" | "unlisted";
+        };
+        ThumbnailResponseDto: {
+            /**
+             * @description Stable public URL of the new 1280×720 JPEG thumbnail
+             * @example http://localhost:8333/streamtube/thumbnails/0b6f…/Xq3v9kT0aB1cD2eF.jpg
+             */
+            thumbnail_url: string;
+        };
+        PublicVideoDto: {
+            /** @example dQw4w9WgXcQ */
+            public_id: string;
+            /** @example My trip to the beach */
+            title: string;
+            /** @description Stable public URL (thumbnails/ prefix), presigned GET for legacy keys, or null */
+            thumbnail_url: string | null;
+            /** @example 2.04 */
+            duration_seconds: number | null;
+            /** Format: date-time */
+            published_at: string;
+            /**
+             * @description Views counted by POST /videos/:id/views
+             * @example 0
+             */
+            view_count: number;
+        };
+        VideoSuggestionsDto: {
+            items: components["schemas"]["PublicVideoDto"][];
+        };
+        PresignedUrlResponseDto: {
+            /** @description Short-lived presigned GET URL served by object storage (supports HTTP Range) */
+            url: string;
+            /** Format: date-time */
+            expires_at: string;
+        };
+        PanelVideoDto: {
+            /** @example dQw4w9WgXcQ */
+            public_id: string;
+            /** @example My trip to the beach */
+            title: string;
+            /** @description Stable public URL (thumbnails/ prefix), presigned GET for legacy keys, or null */
+            thumbnail_url: string | null;
+            /** @enum {string} */
+            processing_status: "uploading" | "processing" | "ready" | "failed";
+            /** @enum {string} */
+            publication_status: "draft" | "published";
+            /** @enum {string} */
+            visibility: "public" | "unlisted";
+            /** Format: date-time */
+            published_at: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** @example 2.04 */
+            duration_seconds: number | null;
+            /**
+             * @description Always 0 in Phase 04
+             * @example 0
+             */
+            view_count: number;
+            /**
+             * @description Always 0 in Phase 04
+             * @example 0
+             */
+            like_count: number;
+            /**
+             * @description Always 0 in Phase 04
+             * @example 0
+             */
+            comment_count: number;
+        };
+        PanelVideoPageDto: {
+            items: components["schemas"]["PanelVideoDto"][];
+            /** @example 1 */
+            page: number;
+            /** @example 20 */
+            per_page: number;
+            /**
+             * @description Total videos of the channel
+             * @example 3
+             */
+            total: number;
+        };
+        PublicVideoPageDto: {
+            items: components["schemas"]["PublicVideoDto"][];
+            /** @description Opaque cursor for the next page; null on the last page */
+            next_cursor: string | null;
+        };
+        CategoryResponseDto: {
+            /**
+             * @description Stable category identifier sent when editing a video
+             * @example jogos
+             */
+            slug: string;
+            /** @example Jogos */
+            name: string;
+        };
+        CategoryListResponseDto: {
+            items: components["schemas"]["CategoryResponseDto"][];
+        };
         ApiErrorEnvelope: {
             /** @example 401 */
             statusCode: number;
@@ -241,7 +838,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": string;
+                };
             };
         };
     };
@@ -294,7 +893,9 @@ export interface operations {
     };
     AuthController_confirmEmail: {
         parameters: {
-            query?: never;
+            query: {
+                token: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -581,6 +1182,855 @@ export interface operations {
             };
             /** @description Missing or invalid access token */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ChannelsController_getMine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelProfileDto"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ChannelsController_updateMine: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateChannelDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelProfileDto"];
+                };
+            };
+            /** @description Body fails validation or is empty */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description NICKNAME_TAKEN, NICKNAME_RESERVED or NICKNAME_CHANGE_COOLDOWN (changed less than 14 days ago) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ChannelsController_getByNickname: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nickname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicChannelDto"];
+                };
+            };
+            /** @description CHANNEL_NOT_FOUND — no channel with this nickname */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateVideoUploadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoUploadStartedDto"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_presignParts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestUploadPartsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadPartsPresignedDto"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Upload is not in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompleteUploadDto"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadCompletedDto"];
+                };
+            };
+            /** @description Validation failed or parts rejected by storage (UPLOAD_PARTS_INVALID) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Upload is not in progress */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Stored file exceeds MAX_UPLOAD_BYTES */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoDetailDto"];
+                };
+            };
+            /** @description Video not found, or the video is a draft and the caller is not its owner */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVideoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoDetailDto"];
+                };
+            };
+            /** @description Validation failed or empty body (VALIDATION_ERROR), or unknown category slug (INVALID_CATEGORY) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Category cannot be cleared on a published video (PUBLISH_REQUIREMENTS_NOT_MET) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoDetailDto"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video is not ready (VIDEO_NOT_READY) or has no category (PUBLISH_REQUIREMENTS_NOT_MET) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_unpublish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoDetailDto"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_replaceThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description JPEG, PNG or WebP image, at most 2 MB (2 097 152 bytes)
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ThumbnailResponseDto"];
+                };
+            };
+            /** @description File missing, not JPEG/PNG/WebP by content, or undecodable (INVALID_THUMBNAIL) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description File larger than 2 MB (THUMBNAIL_TOO_LARGE) */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_listSuggestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoSuggestionsDto"];
+                };
+            };
+            /** @description Video not found, or the video is a draft and the caller is not its owner */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresignedUrlResponseDto"];
+                };
+            };
+            /** @description Video not found, or the video is a draft and the caller is not its owner */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video is not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    VideosController_download: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PresignedUrlResponseDto"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Caller does not own the video */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Video is not ready */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ChannelVideosController_listMine: {
+        parameters: {
+            query?: {
+                /** @description 1-based page number. */
+                page?: number;
+                /** @description Items per page (1–50). */
+                per_page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PanelVideoPageDto"];
+                };
+            };
+            /** @description Invalid page / per_page */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description Missing or invalid access token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    ChannelVideosController_listPublic: {
+        parameters: {
+            query?: {
+                /** @description Items per page (1–50). */
+                limit?: number;
+                /** @description Opaque value from a previous `next_cursor`; omit for the first page. */
+                cursor?: string;
+            };
+            header?: never;
+            path: {
+                nickname: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicVideoPageDto"];
+                };
+            };
+            /** @description VALIDATION_ERROR — malformed cursor or invalid limit */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description CHANNEL_NOT_FOUND — no channel with this nickname */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+        };
+    };
+    CategoriesController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Category catalog */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoryListResponseDto"];
+                };
+            };
+        };
+    };
+    VideoViewsController_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description View recorded or ignored */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Video not found, or the video is a draft and the caller is not its owner */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorEnvelope"];
+                };
+            };
+            /** @description The video is not ready for playback */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

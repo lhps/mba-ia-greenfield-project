@@ -21,6 +21,8 @@ beforeAll(async () => {
   ({ POST } = await import("@/app/api/auth/login/route"));
 });
 
+const { getSession } = await import("@/lib/auth/session");
+
 beforeEach(() => {
   cookieMap.clear();
 });
@@ -80,5 +82,59 @@ describe("POST /api/auth/login", () => {
     const res = await POST(makeRequest({ email: "badrequest@example.com", password: "" }));
     expect(res.status).toBe(400);
     expect(cookieMap.has("streamtube_session")).toBe(false);
+  });
+
+  describe("session channelSlug", () => {
+    it("seals the channel nickname from GET /channels/me into the session", async () => {
+      let authorization: string | null = null;
+      server.use(
+        http.get(`${env.API_URL}/channels/me`, ({ request }) => {
+          authorization = request.headers.get("authorization");
+          return HttpResponse.json({
+            nickname: "pixel_point",
+            name: "Pixel Point",
+            description: null,
+            nickname_changed_at: null,
+            next_nickname_change_at: null,
+            created_at: "2026-10-01T09:00:00.000Z",
+          });
+        })
+      );
+
+      const res = await POST(makeRequest({ email: "alice@example.com", password: "pw" }));
+      expect(res.status).toBe(200);
+      expect(authorization).toBe("Bearer fixture-access-token");
+
+      const session = await getSession();
+      expect(session.isLoggedIn).toBe(true);
+      expect(session.channelSlug).toBe("pixel_point");
+    });
+
+    it("still logs in with an empty channelSlug when GET /channels/me fails", async () => {
+      server.use(
+        http.get(`${env.API_URL}/channels/me`, () =>
+          HttpResponse.json(
+            { statusCode: 500, error: "INTERNAL_ERROR", message: "boom", code: null },
+            { status: 500 }
+          )
+        )
+      );
+
+      const res = await POST(makeRequest({ email: "alice@example.com", password: "pw" }));
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({});
+
+      const session = await getSession();
+      expect(session.isLoggedIn).toBe(true);
+      expect(session.channelSlug).toBe("");
+    });
+
+    it("still logs in when GET /channels/me cannot be reached", async () => {
+      server.use(http.get(`${env.API_URL}/channels/me`, () => HttpResponse.error()));
+
+      const res = await POST(makeRequest({ email: "alice@example.com", password: "pw" }));
+      expect(res.status).toBe(200);
+      expect((await getSession()).channelSlug).toBe("");
+    });
   });
 });
