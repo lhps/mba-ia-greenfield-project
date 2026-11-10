@@ -55,3 +55,25 @@ export type RefreshTokenPair =
 // Shared error envelope (all auth 4xx responses)
 export type ApiErrorEnvelope =
   paths["/auth/register"]["post"]["responses"][400]["content"]["application/json"];
+
+// ─── Videos (watch page) ──────────────────────────────────────────────────────
+
+// Pass-through: VideoDetailDto (GET /videos/{id}), incl. view_count + channel { nickname, name }.
+export type VideoDetail =
+  paths["/videos/{id}"]["get"]["responses"][200]["content"]["application/json"];
+
+// Pass-through: VideoSuggestionsDto (GET /videos/{id}/suggestions) — { items: PublicVideoDto[] }, max 12.
+export type VideoSuggestions =
+  paths["/videos/{id}/suggestions"]["get"]["responses"][200]["content"]["application/json"];
+
+export type PublicVideo = VideoSuggestions["items"][number];
+
+// Pass-through: PresignedUrlResponseDto (GET /videos/{id}/stream and /download) — { url, expires_at }.
+export type PresignedUrl =
+  paths["/videos/{id}/stream"]["get"]["responses"][200]["content"]["application/json"];
+
+// ─── Channels ─────────────────────────────────────────────────────────────────
+
+// Pass-through: ChannelProfileDto (GET /channels/me) — read by the login BFF to seal the session channelSlug.
+export type ChannelProfile =
+  paths["/channels/me"]["get"]["responses"][200]["content"]["application/json"];
