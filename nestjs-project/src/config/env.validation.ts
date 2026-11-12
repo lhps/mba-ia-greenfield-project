@@ -36,4 +36,6 @@ export const envValidationSchema = Joi.object({
   PRESIGNED_URL_TTL_SECONDS: Joi.number().integer().min(1).default(3600),
   STALE_UPLOAD_HOURS: Joi.number().integer().min(1).default(48),
   VIEW_DEDUP_WINDOW_SECONDS: Joi.number().integer().min(1).default(86400),
+  COMMENT_RATE_LIMIT: Joi.number().integer().min(1).default(10),
+  COMMENT_RATE_TTL_SECONDS: Joi.number().integer().min(1).default(60),
 });

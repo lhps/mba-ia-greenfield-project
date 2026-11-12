@@ -88,6 +88,8 @@ describe('channels-public', () => {
       name: expect.any(String) as string,
       description: null,
       created_at: expect.any(String) as string,
+      subscriber_count: 0,
+      is_subscribed: false,
     });
     expect(Number.isNaN(Date.parse(body.created_at))).toBe(false);
 

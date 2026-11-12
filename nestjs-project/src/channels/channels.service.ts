@@ -13,7 +13,9 @@ import {
 import type { ChannelProfileDto } from './dto/channel-profile.dto';
 import type { PublicChannelDto } from './dto/public-channel.dto';
 import type { UpdateChannelDto } from './dto/update-channel.dto';
+import { findChannelByNicknameOrFail } from './channel-lookup';
 import { appendRandomSuffix, sanitizeNickname } from './nickname.util';
+import { SubscriptionsService } from './subscriptions.service';
 import { Channel } from './entities/channel.entity';
 
 const PG_UNIQUE_VIOLATION = '23505';
@@ -32,7 +34,10 @@ function isPgUniqueViolationOnColumn(err: unknown, column: string): boolean {
 
 @Injectable()
 export class ChannelsService {
-  constructor(private readonly dataSource: DataSource) {}
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly subscriptions: SubscriptionsService,
+  ) {}
 
   async findByUserId(userId: string): Promise<Channel | null> {
     return this.dataSource
@@ -40,27 +45,30 @@ export class ChannelsService {
       .findOneBy({ user_id: userId });
   }
 
-  /**
-   * Channel addressed by its public handle (TD-10). Handles are stored
-   * lowercased (`[a-z0-9_]`), so the lookup is case-insensitive by
-   * normalizing the input.
-   */
+  /** Channel addressed by its public handle, case-insensitive (TD-10). */
   async findByNicknameOrFail(nickname: string): Promise<Channel> {
-    const channel = await this.dataSource
-      .getRepository(Channel)
-      .findOneBy({ nickname: nickname.toLowerCase() });
-    if (!channel) throw new ChannelNotFoundException();
-    return channel;
+    return findChannelByNicknameOrFail(this.dataSource, nickname);
   }
 
-  /** Public channel page header (GET /channels/:nickname). */
-  async getPublicProfile(nickname: string): Promise<PublicChannelDto> {
+  /**
+   * Public channel page header (GET /channels/:nickname) with the subscriber
+   * count and the viewer's `is_subscribed` (`false` when anonymous, phase-06 TD-08).
+   */
+  async getPublicProfile(
+    nickname: string,
+    viewerId?: string,
+  ): Promise<PublicChannelDto> {
     const channel = await this.findByNicknameOrFail(nickname);
     return {
       nickname: channel.nickname,
       name: channel.name,
       description: channel.description,
       created_at: channel.created_at.toISOString(),
+      subscriber_count: channel.subscriber_count,
+      is_subscribed: await this.subscriptions.isSubscribed(
+        channel.id,
+        viewerId,
+      ),
     };
   }
 

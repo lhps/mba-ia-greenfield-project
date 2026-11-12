@@ -95,3 +95,15 @@ export const SUGGESTIONS_LIMIT = 12;
 
 /** Every stored thumbnail is a re-encoded JPEG (TD-06). */
 export const THUMBNAIL_CONTENT_TYPE = 'image/jpeg';
+
+/** Like/dislike value shared by video and comment reactions (phase-06 TD-01). */
+export const REACTION_VALUE = {
+  LIKE: 'like',
+  DISLIKE: 'dislike',
+} as const;
+
+export type ReactionValue =
+  (typeof REACTION_VALUE)[keyof typeof REACTION_VALUE];
+
+/** Postgres enum type shared by `video_reactions.value` and `comment_reactions.value`. */
+export const REACTION_VALUE_ENUM_NAME = 'reaction_value';

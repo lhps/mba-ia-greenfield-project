@@ -55,7 +55,7 @@ describe('videos-detail-summary', () => {
 
   const expectSummary = (body: VideoDetailBody, viewCount: number) => {
     expect(body.view_count).toBe(viewCount);
-    expect(body.channel).toEqual(ownerChannel);
+    expect(body.channel).toMatchObject(ownerChannel);
   };
 
   // 1. VideoDetail carrega contagem e canal
@@ -67,7 +67,12 @@ describe('videos-detail-summary', () => {
 
     const body = res.body as VideoDetailBody;
     expectSummary(body, 7);
-    expect(Object.keys(body.channel).sort()).toEqual(['name', 'nickname']);
+    expect(Object.keys(body.channel).sort()).toEqual([
+      'is_subscribed',
+      'name',
+      'nickname',
+      'subscriber_count',
+    ]);
   });
 
   it('respostas-de-gestao-trazem-os-mesmos-campos', async () => {

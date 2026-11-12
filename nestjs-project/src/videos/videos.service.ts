@@ -1,12 +1,16 @@
 import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import type { Repository } from 'typeorm';
+import { SubscriptionsService } from '../channels/subscriptions.service';
 import { VideoNotReadyException } from '../common/exceptions/domain.exception';
 import { StorageService } from '../storage/storage.service';
 import type { PresignedUrlResponseDto } from './dto/presigned-url-response.dto';
 import type { VideoDetailDto } from './dto/video-detail.dto';
+import { VideoReaction } from './entities/video-reaction.entity';
 import type { Video } from './entities/video.entity';
 import { ThumbnailUrlResolver } from './thumbnail-url.resolver';
 import { VideoAccessService } from './video-access.service';
-import { PROCESSING_STATUS } from './videos.constants';
+import { PROCESSING_STATUS, type ReactionValue } from './videos.constants';
 
 @Injectable()
 export class VideosService {
@@ -14,6 +18,9 @@ export class VideosService {
     private readonly access: VideoAccessService,
     private readonly storage: StorageService,
     private readonly thumbnails: ThumbnailUrlResolver,
+    private readonly subscriptions: SubscriptionsService,
+    @InjectRepository(VideoReaction)
+    private readonly reactions: Repository<VideoReaction>,
   ) {}
 
   /** Read by unique URL (TD-04): published for anyone, drafts owner-only. */
@@ -22,15 +29,24 @@ export class VideosService {
     userId?: string,
   ): Promise<VideoDetailDto> {
     const video = await this.access.findReadableOrFail(publicId, userId);
-    return this.toVideoDetail(video);
+    return this.toVideoDetail(video, userId);
   }
 
   /**
    * Maps a video (with `channel` and `category` loaded) to the shared `VideoDetail` shape —
-   * never exposes internal ids, storage keys or upload_id.
+   * never exposes internal ids, storage keys or upload_id. Counts come from the
+   * loaded rows; `my_reaction` / `is_subscribed` are the viewer's state
+   * (`null` / `false` when anonymous, phase-06 TD-08).
    */
-  async toVideoDetail(video: Video): Promise<VideoDetailDto> {
-    const thumbnailUrl = await this.thumbnails.resolve(video.thumbnail_key);
+  async toVideoDetail(
+    video: Video,
+    viewerId?: string,
+  ): Promise<VideoDetailDto> {
+    const [thumbnailUrl, myReaction, isSubscribed] = await Promise.all([
+      this.thumbnails.resolve(video.thumbnail_key),
+      this.findViewerReaction(video.id, viewerId),
+      this.subscriptions.isSubscribed(video.channel.id, viewerId),
+    ]);
 
     return {
       public_id: video.public_id,
@@ -52,8 +68,28 @@ export class VideosService {
       thumbnail_url: thumbnailUrl,
       created_at: video.created_at.toISOString(),
       view_count: video.view_count,
-      channel: { nickname: video.channel.nickname, name: video.channel.name },
+      like_count: video.like_count,
+      comment_count: video.comment_count,
+      my_reaction: myReaction,
+      channel: {
+        nickname: video.channel.nickname,
+        name: video.channel.name,
+        subscriber_count: video.channel.subscriber_count,
+        is_subscribed: isSubscribed,
+      },
     };
+  }
+
+  private async findViewerReaction(
+    videoId: string,
+    viewerId: string | undefined,
+  ): Promise<ReactionValue | null> {
+    if (!viewerId) return null;
+    const reaction = await this.reactions.findOneBy({
+      user_id: viewerId,
+      video_id: videoId,
+    });
+    return reaction?.value ?? null;
   }
 
   /** Same read rule as `findReadable` (TD-04); only ready videos. */

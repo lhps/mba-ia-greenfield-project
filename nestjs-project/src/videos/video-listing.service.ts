@@ -8,7 +8,11 @@ import type {
   PublicVideoPageDto,
 } from './dto/public-video.dto';
 import { Video } from './entities/video.entity';
-import { decodeCursor, encodeCursor } from './pagination-cursor.util';
+import {
+  decodeCursor,
+  encodeCursor,
+  type PublicationCursor,
+} from './pagination-cursor.util';
 import { ThumbnailUrlResolver } from './thumbnail-url.resolver';
 import {
   PROCESSING_STATUS,
@@ -66,14 +70,52 @@ export class VideoListingService {
   ): Promise<PublicVideoPageDto> {
     const after = cursor === undefined ? null : decodeCursor(cursor);
     const channel = await this.channels.findByNicknameOrFail(nickname);
+    return this.listPublicPage(
+      (query) =>
+        query.where('video.channel_id = :channelId', { channelId: channel.id }),
+      after,
+      limit,
+    );
+  }
 
-    const query = this.videos
-      .createQueryBuilder('video')
-      .addSelect(
-        `to_char(video.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
-        CURSOR_PUBLISHED_AT,
-      )
-      .where('video.channel_id = :channelId', { channelId: channel.id })
+  /**
+   * Subscriptions feed (phase-06 TD-09): the public listing's filters, order and
+   * cursor, across every channel the caller follows. Empty when following nobody.
+   */
+  async listSubscriptionFeed(
+    userId: string,
+    cursor: string | undefined,
+    limit: number,
+  ): Promise<PublicVideoPageDto> {
+    const after = cursor === undefined ? null : decodeCursor(cursor);
+    return this.listPublicPage(
+      (query) =>
+        query.where(
+          'video.channel_id IN (SELECT s.channel_id FROM subscriptions s WHERE s.user_id = :userId)',
+          { userId },
+        ),
+      after,
+      limit,
+    );
+  }
+
+  /**
+   * One keyset page of published, public and ready videos within `scope`,
+   * newest `published_at` first (`public_id` breaks ties) — TD-09.
+   */
+  private async listPublicPage(
+    scope: (query: SelectQueryBuilder<Video>) => SelectQueryBuilder<Video>,
+    after: PublicationCursor | null,
+    limit: number,
+  ): Promise<PublicVideoPageDto> {
+    const query = scope(
+      this.videos
+        .createQueryBuilder('video')
+        .addSelect(
+          `to_char(video.published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+          CURSOR_PUBLISHED_AT,
+        ),
+    )
       .andWhere('video.publication_status = :published', {
         published: PUBLICATION_STATUS.PUBLISHED,
       })

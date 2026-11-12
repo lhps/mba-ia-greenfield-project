@@ -7,6 +7,9 @@ import { StorageService } from '../storage/storage.service';
 import type { Video } from './entities/video.entity';
 import { ThumbnailUrlResolver } from './thumbnail-url.resolver';
 import { VideoAccessService } from './video-access.service';
+import type { Repository } from 'typeorm';
+import type { SubscriptionsService } from '../channels/subscriptions.service';
+import type { VideoReaction } from './entities/video-reaction.entity';
 import { VideosService } from './videos.service';
 
 describe('VideosService', () => {
@@ -16,10 +19,14 @@ describe('VideosService', () => {
   };
   const storage = { presignGetObject: jest.fn() };
   const thumbnails = { resolve: jest.fn() };
+  const subscriptions = { isSubscribed: jest.fn() };
+  const reactions = { findOneBy: jest.fn() };
   const service = new VideosService(
     access as unknown as VideoAccessService,
     storage as unknown as StorageService,
     thumbnails as unknown as ThumbnailUrlResolver,
+    subscriptions as unknown as SubscriptionsService,
+    reactions as unknown as Repository<VideoReaction>,
   );
   const base = {
     id: 'internal-id',
@@ -31,15 +38,22 @@ describe('VideosService', () => {
     publication_status: 'draft',
     created_at: new Date('2026-11-03T12:00:00Z'),
     view_count: 0,
+    like_count: 0,
+    comment_count: 0,
     channel: {
       id: 'channel-id',
       user_id: 'owner-user-id',
       nickname: 'my-channel',
       name: 'My Channel',
+      subscriber_count: 0,
     },
   };
 
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    subscriptions.isSubscribed.mockResolvedValue(false);
+    reactions.findOneBy.mockResolvedValue(null);
+  });
 
   describe('toVideoDetail', () => {
     it('should map every VideoDetail field and omit internal fields', async () => {
@@ -59,6 +73,9 @@ describe('VideosService', () => {
         video_key: 'videos/internal-id/video.mp4',
         thumbnail_key: 'thumbnails/internal-id/v1.jpg',
         view_count: 42,
+        like_count: 5,
+        comment_count: 3,
+        channel: { ...base.channel, subscriber_count: 9 },
       } as unknown as Video;
       thumbnails.resolve.mockResolvedValue('http://s3/thumb');
 
@@ -80,7 +97,15 @@ describe('VideosService', () => {
         thumbnail_url: 'http://s3/thumb',
         created_at: '2026-11-03T12:00:00.000Z',
         view_count: 42,
-        channel: { nickname: 'my-channel', name: 'My Channel' },
+        like_count: 5,
+        comment_count: 3,
+        my_reaction: null,
+        channel: {
+          nickname: 'my-channel',
+          name: 'My Channel',
+          subscriber_count: 9,
+          is_subscribed: false,
+        },
       });
       expect(thumbnails.resolve).toHaveBeenCalledWith(
         'thumbnails/internal-id/v1.jpg',
@@ -117,7 +142,7 @@ describe('VideosService', () => {
       expect(storage.presignGetObject).not.toHaveBeenCalled();
     });
 
-    it('should expose only nickname and name of the channel, never its ids', async () => {
+    it('should report anonymous viewers with no reaction and not subscribed, without lookups', async () => {
       const video = {
         ...base,
         title: 'clip',
@@ -129,7 +154,59 @@ describe('VideosService', () => {
 
       const result = await service.toVideoDetail(video);
 
-      expect(Object.keys(result.channel).sort()).toEqual(['name', 'nickname']);
+      expect(result.my_reaction).toBeNull();
+      expect(result.channel.is_subscribed).toBe(false);
+      expect(reactions.findOneBy).not.toHaveBeenCalled();
+      expect(subscriptions.isSubscribed).toHaveBeenCalledWith(
+        'channel-id',
+        undefined,
+      );
+    });
+
+    it("should fill the viewer's reaction and subscription", async () => {
+      const video = {
+        ...base,
+        title: 'clip',
+        category: null,
+        published_at: null,
+        thumbnail_key: null,
+      } as unknown as Video;
+      thumbnails.resolve.mockResolvedValue(null);
+      reactions.findOneBy.mockResolvedValue({ value: 'dislike' });
+      subscriptions.isSubscribed.mockResolvedValue(true);
+
+      const result = await service.toVideoDetail(video, 'viewer-id');
+
+      expect(result.my_reaction).toBe('dislike');
+      expect(result.channel.is_subscribed).toBe(true);
+      expect(reactions.findOneBy).toHaveBeenCalledWith({
+        user_id: 'viewer-id',
+        video_id: 'internal-id',
+      });
+      expect(subscriptions.isSubscribed).toHaveBeenCalledWith(
+        'channel-id',
+        'viewer-id',
+      );
+    });
+
+    it('should expose only public channel fields, never its ids', async () => {
+      const video = {
+        ...base,
+        title: 'clip',
+        category: null,
+        published_at: null,
+        thumbnail_key: null,
+      } as unknown as Video;
+      thumbnails.resolve.mockResolvedValue(null);
+
+      const result = await service.toVideoDetail(video);
+
+      expect(Object.keys(result.channel).sort()).toEqual([
+        'is_subscribed',
+        'name',
+        'nickname',
+        'subscriber_count',
+      ]);
       expect(result.view_count).toBe(0);
       expect(JSON.stringify(result)).not.toContain('owner-user-id');
       expect(JSON.stringify(result)).not.toContain('channel-id');

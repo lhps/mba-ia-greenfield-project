@@ -1,4 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
+import authConfig from '../config/auth.config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -23,6 +24,7 @@ import { Video } from './entities/video.entity';
 import { generatePublicId } from './public-id.util';
 import { ThumbnailUrlResolver } from './thumbnail-url.resolver';
 import { VideoListingService } from './video-listing.service';
+import { Subscription } from '../channels/entities/subscription.entity';
 
 describe('VideoListingService (integration)', () => {
   let module: TestingModule;
@@ -37,11 +39,19 @@ describe('VideoListingService (integration)', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [storageConfig, uploadConfig],
+          load: [storageConfig, uploadConfig, authConfig],
         }),
         TypeOrmModule.forRoot(
           createTestDataSource(
-            [User, Channel, RefreshToken, VerificationToken, Video, Category],
+            [
+              User,
+              Channel,
+              RefreshToken,
+              VerificationToken,
+              Video,
+              Category,
+              Subscription,
+            ],
             { synchronize: false },
           ).options,
         ),
@@ -520,6 +530,92 @@ describe('VideoListingService (integration)', () => {
 
     it('should return an empty list when no other video is eligible', async () => {
       expect(await service.listSuggestions(current)).toEqual([]);
+    });
+  });
+
+  describe('listSubscriptionFeed', () => {
+    let viewerId: string;
+    let thirdChannelId: string;
+
+    function seedPublic(
+      channelId: string,
+      publishedAt: string,
+      overrides: Partial<Video> = {},
+    ): Promise<Video> {
+      return seedVideo(channelId, '2026-10-01T10:00:00Z', {
+        processing_status: 'ready',
+        publication_status: 'published',
+        visibility: 'public',
+        published_at: new Date(publishedAt),
+        ...overrides,
+      });
+    }
+
+    beforeEach(async () => {
+      viewerId = (await createUserWithChannel('feed_viewer')).userId;
+      thirdChannelId = (await createUserWithChannel('feed_third')).channelId;
+      await dataSource.getRepository(Subscription).save([
+        { user_id: viewerId, channel_id: ownerChannelId },
+        { user_id: viewerId, channel_id: otherChannelId },
+      ]);
+    });
+
+    it('should list only public, published and ready videos of followed channels, newest first', async () => {
+      const ownerOld = await seedPublic(ownerChannelId, '2026-11-01T12:00:00Z');
+      const otherNew = await seedPublic(otherChannelId, '2026-11-03T12:00:00Z');
+      await seedPublic(ownerChannelId, '2026-11-04T12:00:00Z', {
+        publication_status: 'draft',
+      });
+      await seedPublic(ownerChannelId, '2026-11-04T12:00:00Z', {
+        visibility: 'unlisted',
+      });
+      await seedPublic(otherChannelId, '2026-11-04T12:00:00Z', {
+        processing_status: 'processing',
+      });
+      await seedPublic(thirdChannelId, '2026-11-05T12:00:00Z');
+
+      const result = await service.listSubscriptionFeed(
+        viewerId,
+        undefined,
+        24,
+      );
+
+      expect(result.items.map((item) => item.public_id)).toEqual([
+        otherNew.public_id,
+        ownerOld.public_id,
+      ]);
+      expect(result.next_cursor).toBeNull();
+    });
+
+    it('should page through the feed by keyset without overlap', async () => {
+      const seeded: Video[] = [];
+      for (let day = 1; day <= 5; day++) {
+        seeded.push(
+          await seedPublic(
+            day % 2 ? ownerChannelId : otherChannelId,
+            `2026-11-0${day}T12:00:00Z`,
+          ),
+        );
+      }
+
+      const ids: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await service.listSubscriptionFeed(viewerId, cursor, 2);
+        ids.push(...page.items.map((item) => item.public_id));
+        cursor = page.next_cursor ?? undefined;
+      } while (cursor !== undefined);
+
+      expect(ids).toEqual(seeded.reverse().map((video) => video.public_id));
+    });
+
+    it('should be empty for a user who follows nobody', async () => {
+      await seedPublic(ownerChannelId, '2026-11-01T12:00:00Z');
+      const loner = await createUserWithChannel('feed_loner');
+
+      await expect(
+        service.listSubscriptionFeed(loner.userId, undefined, 24),
+      ).resolves.toEqual({ items: [], next_cursor: null });
     });
   });
 });

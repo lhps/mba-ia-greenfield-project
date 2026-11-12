@@ -39,7 +39,7 @@ export function decodeCursor(raw: string): PublicationCursor {
 }
 
 /** Rejects impossible calendar values (e.g. month 13, Feb 30) that the pattern lets through. */
-function isValidUtcInstant(value: string): boolean {
+export function isValidUtcInstant(value: string): boolean {
   if (!UTC_INSTANT_PATTERN.test(value)) return false;
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return false;

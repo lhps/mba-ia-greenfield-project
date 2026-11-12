@@ -25,6 +25,9 @@ import { generatePublicId } from './public-id.util';
 import { ThumbnailUrlResolver } from './thumbnail-url.resolver';
 import { VideoAccessService } from './video-access.service';
 import { VideoManagementService } from './video-management.service';
+import { Subscription } from '../channels/entities/subscription.entity';
+import { SubscriptionsService } from '../channels/subscriptions.service';
+import { VideoReaction } from './entities/video-reaction.entity';
 import { VideosService } from './videos.service';
 
 describe('VideoManagementService (integration)', () => {
@@ -43,11 +46,20 @@ describe('VideoManagementService (integration)', () => {
         }),
         TypeOrmModule.forRoot(
           createTestDataSource(
-            [User, Channel, RefreshToken, VerificationToken, Video, Category],
+            [
+              User,
+              Channel,
+              RefreshToken,
+              VerificationToken,
+              Video,
+              Category,
+              Subscription,
+              VideoReaction,
+            ],
             { synchronize: false },
           ).options,
         ),
-        TypeOrmModule.forFeature([Video]),
+        TypeOrmModule.forFeature([Video, VideoReaction]),
         CategoriesModule,
         StorageModule,
       ],
@@ -56,6 +68,7 @@ describe('VideoManagementService (integration)', () => {
         VideoAccessService,
         VideosService,
         ThumbnailUrlResolver,
+        SubscriptionsService,
       ],
     }).compile();
     service = module.get(VideoManagementService);

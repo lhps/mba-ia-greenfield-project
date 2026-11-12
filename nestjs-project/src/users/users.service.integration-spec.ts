@@ -3,6 +3,7 @@ import { RefreshToken } from '../auth/entities/refresh-token.entity';
 import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { Channel } from '../channels/entities/channel.entity';
 import { ChannelsService } from '../channels/channels.service';
+import { SubscriptionsService } from '../channels/subscriptions.service';
 import {
   cleanAllTables,
   createTestDataSource,
@@ -32,7 +33,10 @@ describe('UsersService (integration)', () => {
     await dataSource.initialize();
     userRepository = dataSource.getRepository(User);
     channelRepository = dataSource.getRepository(Channel);
-    const channelsService = new ChannelsService(dataSource);
+    const channelsService = new ChannelsService(
+      dataSource,
+      new SubscriptionsService(dataSource),
+    );
     usersService = new UsersService(userRepository, channelsService);
   });
 
@@ -99,7 +103,10 @@ describe('UsersService (integration)', () => {
     });
 
     it('compensates by deleting the user when channel creation fails irrecoverably', async () => {
-      const failingChannelsService = new ChannelsService(dataSource);
+      const failingChannelsService = new ChannelsService(
+        dataSource,
+        new SubscriptionsService(dataSource),
+      );
       jest
         .spyOn(failingChannelsService, 'createChannel')
         .mockRejectedValue(new Error('channel creation failed'));

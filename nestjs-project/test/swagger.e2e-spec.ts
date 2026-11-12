@@ -186,9 +186,73 @@ describe('Swagger endpoints (e2e)', () => {
         channel: { $ref: '#/components/schemas/VideoChannelDto' },
       });
       expect(Object.keys(schemas.VideoChannelDto.properties).sort()).toEqual([
+        'is_subscribed',
         'name',
         'nickname',
+        'subscriber_count',
       ]);
+    });
+
+    it('GET /api/docs-json documents the Phase 06 social operations with bearer security only on writes and /me reads', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const paths = (res.body as Record<string, unknown>).paths as Record<
+        string,
+        Record<string, { security?: unknown[] }>
+      >;
+      const operations: [string, string, boolean][] = [
+        ['/videos/{id}/reaction', 'put', true],
+        ['/videos/{id}/reaction', 'delete', true],
+        ['/videos/{id}/comments', 'get', false],
+        ['/videos/{id}/comments', 'post', true],
+        ['/comments/{id}/replies', 'get', false],
+        ['/comments/{id}', 'delete', true],
+        ['/comments/{id}/reaction', 'put', true],
+        ['/comments/{id}/reaction', 'delete', true],
+        ['/channels/{nickname}/subscription', 'put', true],
+        ['/channels/{nickname}/subscription', 'delete', true],
+        ['/me/subscriptions', 'get', true],
+        ['/me/subscriptions/videos', 'get', true],
+      ];
+
+      for (const [path, method, isProtected] of operations) {
+        const operation = paths[path]?.[method];
+        expect(operation).toBeDefined();
+        if (isProtected) {
+          expect(operation.security).toEqual([{ 'access-token': [] }]);
+        } else {
+          expect(operation.security).toBeUndefined();
+        }
+      }
+    });
+
+    it('GET /api/docs-json documents the Phase 06 schemas and the social fields of VideoDetail and PublicChannel', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/docs-json')
+        .expect(200);
+      const schemas = (
+        (res.body as Record<string, unknown>).components as Record<
+          string,
+          Record<string, { properties: Record<string, unknown> }>
+        >
+      ).schemas;
+
+      for (const name of [
+        'ReactionStateDto',
+        'CommentDto',
+        'CommentPageDto',
+        'SubscriptionStateDto',
+        'SubscribedChannelPageDto',
+      ]) {
+        expect(schemas[name]).toBeDefined();
+      }
+      expect(Object.keys(schemas.VideoDetailDto.properties)).toEqual(
+        expect.arrayContaining(['like_count', 'comment_count', 'my_reaction']),
+      );
+      expect(Object.keys(schemas.PublicChannelDto.properties)).toEqual(
+        expect.arrayContaining(['subscriber_count', 'is_subscribed']),
+      );
     });
 
     it('GET /api/docs-json documents PUT /videos/{id}/thumbnail as a multipart upload with a required binary file', async () => {

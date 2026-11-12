@@ -9,6 +9,7 @@ import { User } from '../users/entities/user.entity';
 import { NicknameTakenException } from '../common/exceptions/domain.exception';
 import { NICKNAME_CHANGE_COOLDOWN_MS } from './channels.constants';
 import { ChannelsService } from './channels.service';
+import { SubscriptionsService } from './subscriptions.service';
 import { Channel } from './entities/channel.entity';
 import { Video } from '../videos/entities/video.entity';
 import { Category } from '../categories/entities/category.entity';
@@ -33,7 +34,10 @@ describe('ChannelsService (integration)', () => {
     await dataSource.initialize();
     userRepository = dataSource.getRepository(User);
     channelRepository = dataSource.getRepository(Channel);
-    channelsService = new ChannelsService(dataSource);
+    channelsService = new ChannelsService(
+      dataSource,
+      new SubscriptionsService(dataSource),
+    );
   });
 
   afterAll(async () => {

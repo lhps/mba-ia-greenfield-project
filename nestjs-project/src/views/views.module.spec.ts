@@ -19,6 +19,8 @@ import { VideoViewsController } from './video-views.controller';
 import { ViewCountingService } from './view-counting.service';
 import { ViewDedupStore } from './view-dedup.store';
 import { ViewsModule } from './views.module';
+import { Subscription } from '../channels/entities/subscription.entity';
+import { VideoReaction } from '../videos/entities/video-reaction.entity';
 
 const ALL_ENTITIES = [
   User,
@@ -27,6 +29,8 @@ const ALL_ENTITIES = [
   VerificationToken,
   Video,
   Category,
+  Subscription,
+  VideoReaction,
 ];
 
 describe('ViewsModule', () => {

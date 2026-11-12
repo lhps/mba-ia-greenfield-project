@@ -80,7 +80,7 @@ describe('VideoManagementService', () => {
       visibility: 'public',
     });
     expect(categories.findBySlug).not.toHaveBeenCalled();
-    expect(videosService.toVideoDetail).toHaveBeenCalledWith(saved);
+    expect(videosService.toVideoDetail).toHaveBeenCalledWith(saved, 'owner');
     expect(result).toEqual({ public_id: 'AbC_def-123' });
   });
 
@@ -220,7 +220,7 @@ describe('VideoManagementService', () => {
       expect(saved.publication_status).toBe('published');
       expect(saved.published_at).toBeInstanceOf(Date);
       expect(saved.published_at?.getTime()).toBeGreaterThanOrEqual(before);
-      expect(videosService.toVideoDetail).toHaveBeenCalledWith(saved);
+      expect(videosService.toVideoDetail).toHaveBeenCalledWith(saved, 'owner');
     });
 
     it('should keep the first published_at when re-publishing a draft', async () => {
@@ -252,7 +252,7 @@ describe('VideoManagementService', () => {
 
       expect(repo.save).not.toHaveBeenCalled();
       expect(video.published_at).toBe(firstPublishedAt);
-      expect(videosService.toVideoDetail).toHaveBeenCalledWith(video);
+      expect(videosService.toVideoDetail).toHaveBeenCalledWith(video, 'owner');
     });
   });
 
@@ -275,7 +275,7 @@ describe('VideoManagementService', () => {
         publication_status: 'draft',
         published_at: firstPublishedAt,
       });
-      expect(videosService.toVideoDetail).toHaveBeenCalledWith(saved);
+      expect(videosService.toVideoDetail).toHaveBeenCalledWith(saved, 'owner');
     });
 
     it('should return a draft unchanged without persisting', async () => {
@@ -285,7 +285,7 @@ describe('VideoManagementService', () => {
       await service.unpublish('AbC_def-123', 'owner');
 
       expect(repo.save).not.toHaveBeenCalled();
-      expect(videosService.toVideoDetail).toHaveBeenCalledWith(video);
+      expect(videosService.toVideoDetail).toHaveBeenCalledWith(video, 'owner');
     });
 
     it('should propagate access denial without persisting', async () => {

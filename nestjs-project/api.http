@@ -292,3 +292,107 @@ GET {{baseUrl}}/videos/{{videoId}}/suggestions
 ### 31. Download (somente o dono do canal; outros usuários recebem 403)
 GET {{baseUrl}}/videos/{{videoId}}/download
 Authorization: Bearer {{accessToken}}
+
+
+###
+# ─────────────────────────────────────────────
+# INTERAÇÕES SOCIAIS (Fase 06)
+# ─────────────────────────────────────────────
+# Fluxo: curtir vídeo → comentar → responder → listar comentários/respostas → curtir comentário
+#        → apagar comentário → seguir canal → cabeçalho do canal → meus canais → feed → deixar de seguir.
+# Usa @videoId e @channelNickname acima; o vídeo precisa estar pronto (processing_status = ready).
+# Não dá para seguir o próprio canal (409): use @channelNickname de OUTRO usuário nos passos 39–43.
+@commentId = {{createComment.response.body.$.id}}
+@replyId = {{createReply.response.body.$.id}}
+
+### 32. Curtir o vídeo — 200 { like_count, my_reaction }; repetir não muda nada
+PUT {{baseUrl}}/videos/{{videoId}}/reaction
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "value": "like"
+}
+
+
+### 33. Remover minha reação do vídeo — 200 com my_reaction: null
+DELETE {{baseUrl}}/videos/{{videoId}}/reaction
+Authorization: Bearer {{accessToken}}
+
+
+### 34. Comentar o vídeo — 201; body aparado, 1–2000 caracteres; limite de 10 comentários / 60 s por usuário
+# @name createComment
+POST {{baseUrl}}/videos/{{videoId}}/comments
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "body": "  Ótimo vídeo!  "
+}
+
+
+### 35. Responder o comentário — resposta a uma resposta vai para a raiz (um nível)
+# @name createReply
+POST {{baseUrl}}/videos/{{videoId}}/comments
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "body": "Obrigado!",
+  "parent_id": "{{commentId}}"
+}
+
+
+### 36. Listar comentários raiz (público; mais novos primeiro; com token preenche my_reaction)
+GET {{baseUrl}}/videos/{{videoId}}/comments?limit=20
+Authorization: Bearer {{accessToken}}
+
+
+### 37. Listar respostas do comentário (público; mais antigas primeiro)
+GET {{baseUrl}}/comments/{{commentId}}/replies
+
+
+### 38. Curtir o comentário — 200 { like_count, my_reaction }
+PUT {{baseUrl}}/comments/{{commentId}}/reaction
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "value": "like"
+}
+
+
+### 39. Apagar a resposta (somente o autor) — 204; o contador de respostas da raiz cai
+DELETE {{baseUrl}}/comments/{{replyId}}
+Authorization: Bearer {{accessToken}}
+
+
+### 40. Apagar o comentário raiz — 204; sem respostas é removido, com respostas vira placeholder (deleted: true)
+DELETE {{baseUrl}}/comments/{{commentId}}
+Authorization: Bearer {{accessToken}}
+
+
+### 41. Seguir o canal — 200 { subscriber_count, is_subscribed: true }; idempotente
+PUT {{baseUrl}}/channels/{{channelNickname}}/subscription
+Authorization: Bearer {{accessToken}}
+
+
+### 42. Cabeçalho do canal com estado do espectador (sem token: is_subscribed = false)
+GET {{baseUrl}}/channels/{{channelNickname}}
+Authorization: Bearer {{accessToken}}
+
+
+### 43. Meus canais seguidos (inscrição mais recente primeiro; paginação por next_cursor)
+GET {{baseUrl}}/me/subscriptions?limit=24
+Authorization: Bearer {{accessToken}}
+
+
+### 44. Feed dos canais seguidos (publicados, públicos e prontos; mesmo formato da listagem do canal)
+GET {{baseUrl}}/me/subscriptions/videos?limit=24
+Authorization: Bearer {{accessToken}}
+
+
+### 45. Deixar de seguir — 200 { subscriber_count, is_subscribed: false }; idempotente
+DELETE {{baseUrl}}/channels/{{channelNickname}}/subscription
+Authorization: Bearer {{accessToken}}
+

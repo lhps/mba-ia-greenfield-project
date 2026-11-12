@@ -106,6 +106,10 @@ export class Video {
   @Column({ type: 'integer', default: 0 })
   like_count: number;
 
+  /** Stored for symmetry with comments, never exposed (phase-06 TD-03). */
+  @Column({ type: 'integer', default: 0 })
+  dislike_count: number;
+
   @Column({ type: 'integer', default: 0 })
   comment_count: number;
 
