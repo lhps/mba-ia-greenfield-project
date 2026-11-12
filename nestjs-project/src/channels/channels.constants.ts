@@ -52,3 +52,9 @@ export const UPDATABLE_CHANNEL_FIELDS = [
   'name',
   'description',
 ] as const;
+
+/** Keyset pagination of GET /me/subscriptions (phase-06 TD-09). */
+export const SUBSCRIPTION_PAGINATION = {
+  DEFAULT_LIMIT: 24,
+  MAX_LIMIT: 50,
+} as const;

@@ -2,9 +2,11 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   PROCESSING_STATUS,
   PUBLICATION_STATUS,
+  REACTION_VALUE,
   VISIBILITY,
   type ProcessingStatus,
   type PublicationStatus,
+  type ReactionValue,
   type Visibility,
 } from '../videos.constants';
 
@@ -27,6 +29,14 @@ export class VideoChannelDto {
 
   @ApiProperty({ example: 'My Channel' })
   name: string;
+
+  @ApiProperty({ type: 'integer', example: 0 })
+  subscriber_count: number;
+
+  @ApiProperty({
+    description: 'Whether the caller follows the channel; false when anonymous',
+  })
+  is_subscribed: boolean;
 }
 
 /** Shared `VideoDetail` shape — never carries internal ids or storage keys. */
@@ -80,6 +90,19 @@ export class VideoDetailDto {
 
   @ApiProperty({ type: 'integer', example: 0 })
   view_count: number;
+
+  @ApiProperty({ type: 'integer', example: 0 })
+  like_count: number;
+
+  @ApiProperty({ type: 'integer', example: 0 })
+  comment_count: number;
+
+  @ApiProperty({
+    enum: Object.values(REACTION_VALUE),
+    nullable: true,
+    description: "Caller's reaction; null when anonymous",
+  })
+  my_reaction: ReactionValue | null;
 
   @ApiProperty({ type: VideoChannelDto })
   channel: VideoChannelDto;

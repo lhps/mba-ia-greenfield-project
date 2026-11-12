@@ -87,3 +87,28 @@ describe('envValidationSchema — view dedup window', () => {
     },
   );
 });
+
+describe('envValidationSchema — comment rate limit', () => {
+  it('should default to 10 comments per 60 seconds', () => {
+    const { value, error } = validate({}) as {
+      value: Record<string, unknown>;
+      error?: Error;
+    };
+
+    expect(error).toBeUndefined();
+    expect(value).toMatchObject({
+      COMMENT_RATE_LIMIT: 10,
+      COMMENT_RATE_TTL_SECONDS: 60,
+    });
+  });
+
+  it.each(['COMMENT_RATE_LIMIT', 'COMMENT_RATE_TTL_SECONDS'])(
+    'should reject %s=0',
+    (key) => {
+      const { error } = validate({ [key]: '0' });
+
+      expect(error).toBeDefined();
+      expect(error!.message).toContain(key);
+    },
+  );
+});

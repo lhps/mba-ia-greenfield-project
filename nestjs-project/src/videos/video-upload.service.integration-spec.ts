@@ -1,5 +1,6 @@
 import { ListMultipartUploadsCommand, S3Client } from '@aws-sdk/client-s3';
 import { ConfigModule } from '@nestjs/config';
+import authConfig from '../config/auth.config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
@@ -41,7 +42,7 @@ describe('VideoUploadService (integration)', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [storageConfig, uploadConfig, queueConfig],
+          load: [storageConfig, uploadConfig, queueConfig, authConfig],
         }),
         QueueModule,
         BullModule.registerQueue({ name: QUEUES.VIDEO_PROCESSING }),

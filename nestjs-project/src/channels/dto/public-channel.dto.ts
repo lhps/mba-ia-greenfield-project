@@ -13,4 +13,13 @@ export class PublicChannelDto {
 
   @ApiProperty({ format: 'date-time' })
   created_at: string;
+
+  @ApiProperty({ type: 'integer', example: 0 })
+  subscriber_count: number;
+
+  @ApiProperty({
+    description:
+      'Whether the caller follows this channel; false when anonymous',
+  })
+  is_subscribed: boolean;
 }

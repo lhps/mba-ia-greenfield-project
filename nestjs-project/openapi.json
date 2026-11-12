@@ -561,7 +561,7 @@
     },
     "/channels/{nickname}": {
       "get": {
-        "description": "Returns the public information of the channel with this nickname (case-insensitive): nickname, name, description and creation date. Anonymous access.",
+        "description": "Returns the public information of the channel with this nickname (case-insensitive): nickname, name, description, creation date and subscriber count. Anonymous access; with a valid bearer token `is_subscribed` tells whether the caller follows the channel (false for anonymous callers or an invalid/expired token).",
         "operationId": "ChannelsController_getByNickname",
         "parameters": [
           {
@@ -598,6 +598,198 @@
         "summary": "Get a public channel page header",
         "tags": [
           "channels"
+        ]
+      }
+    },
+    "/channels/{nickname}/subscription": {
+      "put": {
+        "description": "Follows the channel with this nickname (case-insensitive). Idempotent: following it again changes nothing. Following your own channel is rejected.",
+        "operationId": "ChannelSubscriptionsController_subscribe",
+        "parameters": [
+          {
+            "name": "nickname",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionStateDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CHANNEL_NOT_FOUND — no channel with this nickname",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "SELF_SUBSCRIPTION_NOT_ALLOWED — the channel is yours",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Subscribe to a channel",
+        "tags": [
+          "channels"
+        ]
+      },
+      "delete": {
+        "description": "Stops following the channel. Idempotent: without a subscription the count is unchanged.",
+        "operationId": "ChannelSubscriptionsController_unsubscribe",
+        "parameters": [
+          {
+            "name": "nickname",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionStateDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "CHANNEL_NOT_FOUND — no channel with this nickname",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Unsubscribe from a channel",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/me/subscriptions": {
+      "get": {
+        "description": "Most recent subscription first, with keyset pagination: pass the previous `next_cursor` as `cursor` (null on the last page). Empty when the caller follows no channel.",
+        "operationId": "MeSubscriptionsController_listMine",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–50).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 24,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque value from a previous `next_cursor`; omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscribedChannelPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — malformed cursor or invalid limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "List the channels I follow",
+        "tags": [
+          "subscriptions"
         ]
       }
     },
@@ -865,7 +1057,7 @@
     },
     "/videos/{id}": {
       "get": {
-        "description": "Returns the VideoDetail shape. Published videos (public or unlisted) are readable by anyone with the link; a draft is readable only by its owner. Optional bearer token: when valid it identifies the owner, when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id. Carries `view_count` and the owning `channel { nickname, name }`; the frontend compares `channel.nickname` with the session channelSlug to decide whether to show the download button.",
+        "description": "Returns the VideoDetail shape. Published videos (public or unlisted) are readable by anyone with the link; a draft is readable only by its owner. Optional bearer token: when valid it identifies the owner, when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id. Carries `view_count`, `like_count`, `comment_count` and the owning `channel { nickname, name, subscriber_count }`; the frontend compares `channel.nickname` with the session channelSlug to decide whether to show the download button. Viewer state: `my_reaction` (the caller's like/dislike) and `channel.is_subscribed` — null / false when anonymous.",
         "operationId": "VideosController_findOne",
         "parameters": [
           {
@@ -1567,6 +1759,228 @@
         ]
       }
     },
+    "/videos/{id}/reaction": {
+      "put": {
+        "description": "Sets the caller's reaction on the video. Idempotent: setting the current value again changes nothing. Returns the like count and the caller reaction — the dislike count is never exposed. `:id` is the video public_id.",
+        "operationId": "VideoReactionsController_set",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReactionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactionStateDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — value is not like / dislike",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND — unknown video, or a draft the caller does not own",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY — the video is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Like or dislike a video",
+        "tags": [
+          "videos"
+        ]
+      },
+      "delete": {
+        "description": "Clears the caller's reaction. Idempotent: without a reaction the counts are unchanged. `:id` is the video public_id.",
+        "operationId": "VideoReactionsController_clear",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactionStateDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND — unknown video, or a draft the caller does not own",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY — the video is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Remove my reaction from a video",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/me/subscriptions/videos": {
+      "get": {
+        "description": "Published, public and ready videos of every followed channel, newest published_at first, in the same card shape and keyset pagination as GET /channels/:nickname/videos. Empty when the caller follows no channel.",
+        "operationId": "SubscriptionFeedController_listFeed",
+        "parameters": [
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–50).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 24,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque value from a previous `next_cursor`; omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicVideoPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — malformed cursor or invalid limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Latest videos of the channels I follow",
+        "tags": [
+          "subscriptions"
+        ]
+      }
+    },
     "/categories": {
       "get": {
         "description": "Returns the fixed catalog of video categories ordered by name. The slug is the identifier used when editing a video.",
@@ -1632,6 +2046,452 @@
         "summary": "Record a video view",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/videos/{id}/comments": {
+      "get": {
+        "description": "Newest first with keyset pagination: pass the previous `next_cursor` as `cursor` (null on the last page). Each comment carries its `reply_count`; a deleted comment stays as a placeholder (`deleted: true`) only while it has replies. `my_reaction` is filled when a valid bearer token is sent. `:id` is the video public_id.",
+        "operationId": "CommentsController_listRoots",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–50).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque value from a previous `next_cursor`; omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — malformed cursor or invalid limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND — unknown video, or a draft the caller does not own",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the top-level comments of a video",
+        "tags": [
+          "comments"
+        ]
+      },
+      "post": {
+        "description": "The body is trimmed (1–2000 characters). With `parent_id` the comment answers another one; answering a reply attaches the new comment to that reply's top-level comment (one reply level). Limited per user to COMMENT_RATE_LIMIT comments per COMMENT_RATE_TTL_SECONDS (default 10 per 60 s). `:id` is the video public_id.",
+        "operationId": "CommentsController_create",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCommentDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — body empty or too long, or parent_id not a uuid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "VIDEO_NOT_FOUND — unknown video or a draft the caller does not own; COMMENT_NOT_FOUND — parent_id unknown, deleted or from another video",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY — the video is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many comments by this user"
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Comment on a video or answer a comment",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/comments/{id}/replies": {
+      "get": {
+        "description": "Oldest first with keyset pagination (`cursor` / `next_cursor`). `my_reaction` is filled when a valid bearer token is sent. `:id` is the top-level comment id.",
+        "operationId": "CommentsController_listReplies",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page (1–50).",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "description": "Opaque value from a previous `next_cursor`; omit for the first page.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentPageDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — malformed cursor or invalid limit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "COMMENT_NOT_FOUND — unknown comment, a reply, or its video is not readable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "summary": "List the replies of a top-level comment",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/comments/{id}": {
+      "delete": {
+        "description": "Only the author may delete. A top-level comment with replies becomes a placeholder (`deleted: true`, `body` and `author` null) so its thread stays readable; any other comment is removed. A placeholder disappears once its last reply is deleted. `:id` is the comment id.",
+        "operationId": "CommentsController_remove",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Comment deleted"
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "COMMENT_ACCESS_DENIED — the caller is not the author",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "COMMENT_NOT_FOUND — unknown comment, already deleted, or its video is not readable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Delete my comment",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/comments/{id}/reaction": {
+      "put": {
+        "description": "Sets the caller's reaction on the comment. Idempotent: setting the current value again changes nothing. Returns the like count and the caller reaction — the dislike count is never exposed. `:id` is the comment id.",
+        "operationId": "CommentsController_setReaction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReactionDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactionStateDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR — value is not like / dislike",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "COMMENT_NOT_FOUND — unknown comment, a deleted placeholder, or its video is not readable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY — the comment's video is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Like or dislike a comment",
+        "tags": [
+          "comments"
+        ]
+      },
+      "delete": {
+        "description": "Clears the caller's reaction. Idempotent: without a reaction the counts are unchanged. `:id` is the comment id.",
+        "operationId": "CommentsController_clearReaction",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReactionStateDto"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "COMMENT_NOT_FOUND — unknown comment, a deleted placeholder, or its video is not readable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "VIDEO_NOT_READY — the comment's video is not ready",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "access-token": []
+          }
+        ],
+        "summary": "Remove my reaction from a comment",
+        "tags": [
+          "comments"
         ]
       }
     }
@@ -1819,13 +2679,87 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "subscriber_count": {
+            "type": "integer",
+            "example": 0
+          },
+          "is_subscribed": {
+            "type": "boolean",
+            "description": "Whether the caller follows this channel; false when anonymous"
           }
         },
         "required": [
           "nickname",
           "name",
           "description",
-          "created_at"
+          "created_at",
+          "subscriber_count",
+          "is_subscribed"
+        ]
+      },
+      "SubscriptionStateDto": {
+        "type": "object",
+        "properties": {
+          "subscriber_count": {
+            "type": "integer",
+            "example": 1
+          },
+          "is_subscribed": {
+            "type": "boolean",
+            "example": true
+          }
+        },
+        "required": [
+          "subscriber_count",
+          "is_subscribed"
+        ]
+      },
+      "SubscribedChannelDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "example": "novo_canal"
+          },
+          "name": {
+            "type": "string",
+            "example": "Meu Canal"
+          },
+          "subscriber_count": {
+            "type": "integer",
+            "example": 12
+          },
+          "subscribed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "nickname",
+          "name",
+          "subscriber_count",
+          "subscribed_at"
+        ]
+      },
+      "SubscribedChannelPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SubscribedChannelDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque cursor for the next page; null on the last page"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
         ]
       },
       "CreateVideoUploadDto": {
@@ -2036,11 +2970,21 @@
           "name": {
             "type": "string",
             "example": "My Channel"
+          },
+          "subscriber_count": {
+            "type": "integer",
+            "example": 0
+          },
+          "is_subscribed": {
+            "type": "boolean",
+            "description": "Whether the caller follows the channel; false when anonymous"
           }
         },
         "required": [
           "nickname",
-          "name"
+          "name",
+          "subscriber_count",
+          "is_subscribed"
         ]
       },
       "VideoDetailDto": {
@@ -2127,6 +3071,23 @@
             "type": "integer",
             "example": 0
           },
+          "like_count": {
+            "type": "integer",
+            "example": 0
+          },
+          "comment_count": {
+            "type": "integer",
+            "example": 0
+          },
+          "my_reaction": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "like",
+              "dislike"
+            ],
+            "description": "Caller's reaction; null when anonymous"
+          },
           "channel": {
             "$ref": "#/components/schemas/VideoChannelDto"
           }
@@ -2147,6 +3108,9 @@
           "thumbnail_url",
           "created_at",
           "view_count",
+          "like_count",
+          "comment_count",
+          "my_reaction",
           "channel"
         ]
       },
@@ -2399,6 +3363,44 @@
           "next_cursor"
         ]
       },
+      "SetReactionDto": {
+        "type": "object",
+        "properties": {
+          "value": {
+            "type": "string",
+            "enum": [
+              "like",
+              "dislike"
+            ],
+            "example": "like"
+          }
+        },
+        "required": [
+          "value"
+        ]
+      },
+      "ReactionStateDto": {
+        "type": "object",
+        "properties": {
+          "like_count": {
+            "type": "integer",
+            "example": 1
+          },
+          "my_reaction": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "like",
+              "dislike"
+            ],
+            "example": "like"
+          }
+        },
+        "required": [
+          "like_count",
+          "my_reaction"
+        ]
+      },
       "CategoryResponseDto": {
         "type": "object",
         "properties": {
@@ -2429,6 +3431,127 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "CommentAuthorDto": {
+        "type": "object",
+        "properties": {
+          "nickname": {
+            "type": "string",
+            "example": "jane_doe"
+          },
+          "name": {
+            "type": "string",
+            "example": "Jane Doe"
+          }
+        },
+        "required": [
+          "nickname",
+          "name"
+        ]
+      },
+      "CommentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parent_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid",
+            "description": "Root comment of a reply; null on top-level comments"
+          },
+          "body": {
+            "type": "string",
+            "nullable": true,
+            "description": "null on a deleted placeholder"
+          },
+          "deleted": {
+            "type": "boolean",
+            "description": "true on a deleted top-level comment kept for its replies"
+          },
+          "author": {
+            "nullable": true,
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CommentAuthorDto"
+              }
+            ]
+          },
+          "like_count": {
+            "type": "integer",
+            "example": 0
+          },
+          "reply_count": {
+            "type": "integer",
+            "example": 0
+          },
+          "my_reaction": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "like",
+              "dislike"
+            ],
+            "description": "Caller's reaction; null for anonymous callers"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "parent_id",
+          "body",
+          "deleted",
+          "author",
+          "like_count",
+          "reply_count",
+          "my_reaction",
+          "created_at"
+        ]
+      },
+      "CommentPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CommentDto"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque cursor for the next page; null on the last page"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ]
+      },
+      "CreateCommentDto": {
+        "type": "object",
+        "properties": {
+          "parent_id": {
+            "type": "string",
+            "description": "Comment being answered; a reply to a reply is attached to its root.",
+            "format": "uuid"
+          },
+          "body": {
+            "type": "string",
+            "description": "Comment text — trimmed before validation, 1–2000 characters.",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "body"
         ]
       },
       "ApiErrorEnvelope": {

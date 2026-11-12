@@ -8,6 +8,7 @@ import {
 import { NICKNAME_CHANGE_COOLDOWN_MS } from './channels.constants';
 import { ChannelsService } from './channels.service';
 import { Channel } from './entities/channel.entity';
+import type { SubscriptionsService } from './subscriptions.service';
 
 type ManagerMock = {
   findOne: jest.Mock;
@@ -54,6 +55,14 @@ function makeDataSource(manager: ManagerMock): DataSource {
 }
 
 describe('ChannelsService', () => {
+  let subscriptions: SubscriptionsService & { isSubscribed: jest.Mock };
+
+  beforeEach(() => {
+    subscriptions = {
+      isSubscribed: jest.fn().mockResolvedValue(false),
+    } as unknown as SubscriptionsService & { isSubscribed: jest.Mock };
+  });
+
   describe('createChannel', () => {
     it('derives nickname from email prefix and saves when no collision', async () => {
       const channel = makeChannel('test');
@@ -62,7 +71,10 @@ describe('ChannelsService', () => {
         create: jest.fn().mockReturnValue(channel),
         save: jest.fn().mockResolvedValue(channel),
       });
-      const service = new ChannelsService(makeDataSource(manager));
+      const service = new ChannelsService(
+        makeDataSource(manager),
+        subscriptions,
+      );
 
       const result = await service.createChannel('user-id', 'test@example.com');
 
@@ -84,7 +96,10 @@ describe('ChannelsService', () => {
         create: jest.fn().mockReturnValue(resolved),
         save: jest.fn().mockResolvedValue(resolved),
       });
-      const service = new ChannelsService(makeDataSource(manager));
+      const service = new ChannelsService(
+        makeDataSource(manager),
+        subscriptions,
+      );
 
       const result = await service.createChannel('user-id', 'john@example.com');
 
@@ -106,7 +121,10 @@ describe('ChannelsService', () => {
           .mockRejectedValueOnce(makeUniqueError())
           .mockResolvedValueOnce(resolved),
       });
-      const service = new ChannelsService(makeDataSource(manager));
+      const service = new ChannelsService(
+        makeDataSource(manager),
+        subscriptions,
+      );
 
       const result = await service.createChannel(
         'user-id',
@@ -124,7 +142,10 @@ describe('ChannelsService', () => {
         create: jest.fn(),
         save: jest.fn(),
       });
-      const service = new ChannelsService(makeDataSource(manager));
+      const service = new ChannelsService(
+        makeDataSource(manager),
+        subscriptions,
+      );
 
       await expect(
         service.createChannel('user-id', 'bob@example.com'),
@@ -141,7 +162,10 @@ describe('ChannelsService', () => {
         create: jest.fn().mockReturnValue(channel),
         save: jest.fn().mockRejectedValue(unexpectedError),
       });
-      const service = new ChannelsService(makeDataSource(manager));
+      const service = new ChannelsService(
+        makeDataSource(manager),
+        subscriptions,
+      );
 
       await expect(
         service.createChannel('user-id', 'carol@example.com'),
@@ -166,7 +190,7 @@ describe('ChannelsService', () => {
       const dataSource = {
         getRepository: jest.fn().mockReturnValue(repo),
       } as unknown as DataSource;
-      return { service: new ChannelsService(dataSource), repo };
+      return { service: new ChannelsService(dataSource, subscriptions), repo };
     }
 
     function changedAgo(ms: number): Date {
@@ -300,7 +324,10 @@ describe('ChannelsService', () => {
       const dataSource = {
         getRepository: jest.fn().mockReturnValue({ findOneBy }),
       } as unknown as DataSource;
-      return { service: new ChannelsService(dataSource), findOneBy };
+      return {
+        service: new ChannelsService(dataSource, subscriptions),
+        findOneBy,
+      };
     }
 
     it('returns the channel, looking the handle up lowercased', async () => {
@@ -325,19 +352,29 @@ describe('ChannelsService', () => {
       });
     });
 
-    it('exposes only the public fields on the public profile', async () => {
+    it('exposes only the public fields plus the viewer state on the public profile', async () => {
       const channel = makeChannel('meu_canal');
       channel.description = 'sobre';
+      channel.subscriber_count = 3;
+      subscriptions.isSubscribed.mockResolvedValue(true);
       channel.nickname_changed_at = new Date('2026-11-01T00:00:00.000Z');
       channel.created_at = new Date('2026-10-01T08:00:00.000Z');
       const { service } = makeLookupService(channel);
 
-      await expect(service.getPublicProfile('meu_canal')).resolves.toEqual({
+      await expect(
+        service.getPublicProfile('meu_canal', 'viewer-id'),
+      ).resolves.toEqual({
         nickname: 'meu_canal',
         name: 'meu_canal',
         description: 'sobre',
         created_at: '2026-10-01T08:00:00.000Z',
+        subscriber_count: 3,
+        is_subscribed: true,
       });
+      expect(subscriptions.isSubscribed).toHaveBeenCalledWith(
+        channel.id,
+        'viewer-id',
+      );
     });
   });
 });

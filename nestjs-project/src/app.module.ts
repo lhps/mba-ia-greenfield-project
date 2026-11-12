@@ -17,6 +17,7 @@ import { QueueModule } from './queue/queue.module';
 import { VideosModule } from './videos/videos.module';
 import { ViewsModule } from './views/views.module';
 import { CategoriesModule } from './categories/categories.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { CategoriesModule } from './categories/categories.module';
     VideosModule,
     ViewsModule,
     CategoriesModule,
+    CommentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

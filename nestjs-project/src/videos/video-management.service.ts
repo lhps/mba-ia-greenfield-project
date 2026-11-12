@@ -50,7 +50,7 @@ export class VideoManagementService {
     if (dto.visibility !== undefined) video.visibility = dto.visibility;
 
     const saved = await this.videos.save(video);
-    return this.videosService.toVideoDetail(saved);
+    return this.videosService.toVideoDetail(saved, userId);
   }
 
   /**
@@ -70,13 +70,13 @@ export class VideoManagementService {
       throw new PublishRequirementsNotMetException();
     }
     if (video.publication_status === PUBLICATION_STATUS.PUBLISHED) {
-      return this.videosService.toVideoDetail(video);
+      return this.videosService.toVideoDetail(video, userId);
     }
 
     video.publication_status = PUBLICATION_STATUS.PUBLISHED;
     video.published_at ??= new Date();
     const saved = await this.videos.save(video);
-    return this.videosService.toVideoDetail(saved);
+    return this.videosService.toVideoDetail(saved, userId);
   }
 
   /**
@@ -89,12 +89,12 @@ export class VideoManagementService {
     });
 
     if (video.publication_status === PUBLICATION_STATUS.DRAFT) {
-      return this.videosService.toVideoDetail(video);
+      return this.videosService.toVideoDetail(video, userId);
     }
 
     video.publication_status = PUBLICATION_STATUS.DRAFT;
     const saved = await this.videos.save(video);
-    return this.videosService.toVideoDetail(saved);
+    return this.videosService.toVideoDetail(saved, userId);
   }
 
   private async resolveCategory(

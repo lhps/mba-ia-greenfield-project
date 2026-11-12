@@ -1,0 +1,51 @@
+# phase-06-social-interactions — Progress
+
+**Status:** in progress
+**SIs:** 9/9 completed
+
+### SI-06.1 — Infra: Social Data Model and Migration
+- **Status:** completed
+- **Tests:** `src/database/migrations.integration-spec.ts` 5/5; `src/database/social-entities.integration-spec.ts` 8/8; `src/comments/comment.entity.integration-spec.ts` 4/4; `src/comments/comments.module.spec.ts` 1/1; regression module/entity specs (channels, users, auth, views, video, channel) 19/19; tsc + eslint clean
+- **Observations:** Migration `1794432662530-AddSocialInteractions` generated, then deduplicated `CREATE/DROP TYPE reaction_value` (TypeORM emits shared enum twice). `comments.created_at` and `subscriptions.created_at` use `timestamptz(3)` so keyset cursors round-trip through JS Date (ms). `migrations.integration-spec` now covers all 7 migrations — before, it only re-applied 5, leaving the shared DB drifted (suggestions index present but unrecorded, `migration:run` failed). Module specs that load ChannelsModule/VideosModule got `Subscription`/`VideoReaction` in their entity lists.
+
+### SI-06.2 — PUT/DELETE /videos/:id/reaction
+- **Status:** completed
+- **Tests:** `src/videos/reaction-writer.spec.ts` 8/8; `src/videos/video-reactions.service.spec.ts` 6/6; `src/videos/video-reactions.service.integration-spec.ts` 4/4 (5 repeated runs green); `test/videos-reaction.e2e-spec.ts` 6/6; tsc + eslint clean
+- **Observations:** Counter logic lives in `src/videos/reaction-writer.ts` (`writeReaction` + pure `reactionDeltas`), parameterised by `ReactionTarget` so SI-06.5 reuses it for comments. The delta-per-transition unit cases live in `reaction-writer.spec.ts` (pure function) rather than through a mocked manager. Concurrency: lock own row `FOR UPDATE`; when absent, `INSERT … ON CONFLICT DO NOTHING` (no aborted tx), and on conflict re-lock — looped, because a concurrent clear can delete the winner's row between conflict and re-lock (fix attempt 1: first version applied +1 with a 0-row UPDATE, like_count drifted to 7).
+
+### SI-06.3 — Create and List Comments with Replies
+- **Status:** completed
+- **Tests:** `src/comments/comments.service.spec.ts` 10/10; `src/comments/comments.service.integration-spec.ts` 5/5 (4 runs green); `src/comments/comment-cursor.util.spec.ts` 8/8; `src/comments/comment-throttler.guard.spec.ts` 3/3; `src/comments/comments.module.spec.ts` 1/1; `src/config/env.validation.spec.ts` 15/15; `test/videos-comments.e2e-spec.ts` 7/7; tsc + eslint clean
+- **Observations:** `CommentThrottlerGuard` overrides `canActivate` and calls `handleRequest` on its own named throttler (`comments`) with limit/TTL read from `commentsConfig`, instead of `@Throttle` metadata: the class-level `@SkipThrottle()` (which turns off the global per-IP guard) would otherwise also skip it, and `@Throttle` on the handler would change the global guard's limits too. Reads use raw SQL joined to the author's channel; `my_reaction` comes from one `comment_reactions` lookup per page. A reply locks its root `FOR UPDATE` (with a re-check under the lock) so `reply_count` cannot race a delete in SI-06.4. `isValidUtcInstant` is now exported from `pagination-cursor.util.ts` so the comment cursor reuses it. Spec 1.1/1.2 steps "GET /videos/:id → comment_count" check the stored `videos.comment_count` instead, because `VideoDetail` only exposes it from SI-06.7 (`test/videos-detail-social.e2e-spec.ts` covers it there). The listing scenarios share a `seedListing()` helper rather than a nested `describe`, to keep one `describe` per spec.
+
+### SI-06.4 — DELETE /comments/:id
+- **Status:** completed
+- **Tests:** `src/comments/comments.service.spec.ts` 17/17; `src/comments/comments.service.integration-spec.ts` 10/10 (5 runs green, incl. concurrent root + replies delete); `test/comments-delete.e2e-spec.ts` 5/5; `test/videos-comments.e2e-spec.ts` 7/7 (regression); tsc + eslint clean
+- **Observations:** `remove` locks the root `FOR UPDATE` first for both branches (same order as reply creation) so concurrent root/reply deletes serialize without deadlock; the reply branch checks `affected` to 404 on a concurrent double delete. The comment lookup + read rule was extracted to a private `findReadableOrFail` (shared by `listReplies` and `remove`; SI-06.5 reuses it). Fix attempt 1: one unit mock in `listReplies` lacked the `video` relation after that refactor (test-only fix). As in SI-06.3, the e2e checks the stored `videos.comment_count` instead of `GET /videos/:id` until SI-06.7.
+
+### SI-06.5 — PUT/DELETE /comments/:id/reaction
+- **Status:** completed
+- **Tests:** `src/comments/comment-reactions.service.spec.ts` 5/5; `src/comments/comment-reactions.service.integration-spec.ts` 3/3 (6 runs green, incl. 10 concurrent likes); `test/comments-reaction.e2e-spec.ts` 4/4; regressions `src/comments/*` + `reaction-writer.spec.ts` 59/59, `test/comments-delete.e2e-spec.ts` 5/5, `test/videos-comments.e2e-spec.ts` 7/7; tsc + eslint clean
+- **Observations:** The comment lookup + read rule moved from `CommentsService` into a new `CommentAccessService` (shared by listing, delete and reactions; `CommentsService` unit tests use the real instance over mocked `DataSource` / `VideoAccessService`). Reactions reuse `writeReaction` with `COMMENT_REACTION_TARGET`; the transaction first locks the comment `FOR NO KEY UPDATE` and re-checks it is not deleted/placeholder, so a concurrent delete cannot slip between the check and the write (no FK error, no reaction on a placeholder). The per-transition deltas stay covered by `reaction-writer.spec.ts`; the comment unit spec asserts the writer is called with the comment target.
+
+### SI-06.6 — Channel Subscriptions and Subscriber Count
+- **Status:** completed
+- **Tests:** `src/channels/subscriptions.service.spec.ts` 5/5; `src/channels/subscriptions.service.integration-spec.ts` 3/3 (5 runs green, incl. 10 concurrent subscribes and same-user subscribe/unsubscribe race); `src/channels/channels.module.spec.ts` 1/1; `src/auth/auth.module.spec.ts` 2/2; regressions src/channels+auth+users+comments+views + 2 videos integration specs 235/235; `test/channels-subscription.e2e-spec.ts` 4/4, `test/channels-public.e2e-spec.ts` 5/5, `test/auth.e2e-spec.ts` 48/48; tsc + eslint clean
+- **Observations:** `AuthJwtModule` (`src/auth/auth-jwt.module.ts`) holds the access-token `JwtModule`; `AuthModule` imports/re-exports it, `ChannelsModule` imports it directly (no cycle). Deviation: to avoid a `ChannelsService` ↔ `SubscriptionsService` provider cycle, the case-insensitive nickname lookup moved to a shared function `findChannelByNicknameOrFail` (`src/channels/channel-lookup.ts`); `SubscriptionsService` depends only on `DataSource`, and `ChannelsService` injects `SubscriptionsService` for `isSubscribed`. Counter delta applied only when `INSERT … ON CONFLICT DO NOTHING RETURNING` / `DELETE … RETURNING` really changed a row (DELETE result is `[rows, rowCount]`). Module/integration specs that load `ChannelsModule` now need `authConfig` in the global `ConfigModule`. `test/channels-public.e2e-spec.ts` updated for the new `subscriber_count` / `is_subscribed` fields (contract change from this SI).
+
+### SI-06.7 — VideoDetail with Counts and Viewer State
+- **Status:** completed
+- **Tests:** `src/videos/videos.service.spec.ts` 12/12 (anonymous → null/false without reaction lookup; viewer dislike + subscriber); regressions src/videos+views+comments 240/240; `test/videos-detail-social.e2e-spec.ts` 4/4; e2e regressions videos-detail-summary 2/2, videos-get 6/6, videos-update 6/6, videos-publish 6/6, videos-read-access 5/5, videos-watch-access 3/3, swagger 11/11; tsc + eslint clean
+- **Observations:** `VideosService.toVideoDetail(video, viewerId?)` resolves thumbnail, `my_reaction` (one `video_reactions` lookup, skipped when anonymous) and `is_subscribed` (`SubscriptionsService`) in parallel; `findReadable` and `VideoManagementService.update/publish/unpublish` pass the caller id. Contract change updated two older e2e assertions that pinned the channel key set (`test/videos-detail-summary.e2e-spec.ts`, `test/swagger.e2e-spec.ts`); `video-management.service.integration-spec.ts` now provides `SubscriptionsService` + `VideoReaction`.
+
+### SI-06.8 — Subscribed-channels Area
+- **Status:** completed
+- **Tests:** `src/channels/subscription-cursor.util.spec.ts` 9/9; `src/channels/subscriptions.service.integration-spec.ts` 6/6 (listMine order, keyset pages, nickname tie-break, empty); `src/videos/video-listing.service.integration-spec.ts` 18/18 (feed: followed only, exclusions, keyset, empty); regressions src/channels 101/101 total; `test/me-subscriptions.e2e-spec.ts` 4/4 (3 runs green); channels-subscription 4/4, channels-public 5/5, swagger 11/11; tsc + eslint clean
+- **Observations:** The public listing query moved into a private `VideoListingService.listPublicPage(scope, after, limit)`; `listPublicByChannel` and the new `listSubscriptionFeed` only differ by scope (`channel_id IN (SELECT channel_id FROM subscriptions WHERE user_id = :userId)`). `listMine` uses raw SQL with keyset `(created_at DESC, nickname ASC)`; the subscription cursor accepts stored lowercase handles `[a-z0-9_]{1,50}` (grandfathered lengths). Pagination constants for subscriptions live in `channels.constants.ts` (`SUBSCRIPTION_PAGINATION`, 24/50). Both controllers use the new Swagger tag `subscriptions`.
+
+### SI-06.9 — OpenAPI Contract Export and HTTP Examples
+- **Status:** completed
+- **Tests:** `test/swagger.e2e-spec.ts` 13/13 (Phase 06 paths + bearer security only on writes and /me reads; schemas `ReactionStateDto`, `CommentDto`, `CommentPageDto`, `SubscriptionStateDto`, `SubscribedChannelPageDto`; `VideoDetailDto` / `PublicChannelDto` social fields); `npm run openapi:export` re-run produces no diff
+- **Observations:** Schema names keep the project's `Dto` suffix (`ReactionStateDto`, `CommentDto`, …) — the plan AC lists them without it. `api.http` gained flows 32–45 (video reaction → comment → reply → listings → comment like → delete → subscribe → channel header → my subscriptions → feed → unsubscribe).
+
+**Final verification (2026-11-11):** `npm test -- --runInBand` 74/74 suites, 504/504 tests; `npm run test:e2e -- --runInBand` 27/27 suites, 178/178 tests; `tsc --noEmit`, eslint (no --fix) and `npm run build` clean.

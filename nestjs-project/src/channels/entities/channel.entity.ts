@@ -31,6 +31,9 @@ export class Channel {
   @Column({ type: 'timestamptz', nullable: true })
   nickname_changed_at: Date | null;
 
+  @Column({ type: 'integer', default: 0 })
+  subscriber_count: number;
+
   @CreateDateColumn()
   created_at: Date;
 

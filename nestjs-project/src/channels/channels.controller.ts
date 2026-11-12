@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -9,6 +9,7 @@ import {
 import type { JwtPayload } from '../auth/auth.types';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 import { ChannelsService } from './channels.service';
 import { ChannelProfileDto } from './dto/channel-profile.dto';
@@ -82,12 +83,15 @@ export class ChannelsController {
 
   // Must stay after every `me` route (see class comment).
   @Public()
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':nickname')
   @ApiOperation({
     summary: 'Get a public channel page header',
     description:
       'Returns the public information of the channel with this nickname (case-insensitive): ' +
-      'nickname, name, description and creation date. Anonymous access.',
+      'nickname, name, description, creation date and subscriber count. Anonymous access; ' +
+      'with a valid bearer token `is_subscribed` tells whether the caller follows the channel ' +
+      '(false for anonymous callers or an invalid/expired token).',
   })
   @ApiResponse({ status: 200, type: PublicChannelDto })
   @ApiResponse({
@@ -96,8 +100,9 @@ export class ChannelsController {
     schema: errorSchema,
   })
   async getByNickname(
+    @CurrentUser() user: JwtPayload | undefined,
     @Param('nickname') nickname: string,
   ): Promise<PublicChannelDto> {
-    return this.channelsService.getPublicProfile(nickname);
+    return this.channelsService.getPublicProfile(nickname, user?.sub);
   }
 }

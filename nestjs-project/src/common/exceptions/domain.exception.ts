@@ -173,3 +173,29 @@ export class NicknameChangeCooldownException extends DomainException {
     );
   }
 }
+
+export class CommentNotFoundException extends DomainException {
+  constructor() {
+    super('COMMENT_NOT_FOUND', 404, 'Comment not found');
+  }
+}
+
+export class CommentAccessDeniedException extends DomainException {
+  constructor() {
+    super(
+      'COMMENT_ACCESS_DENIED',
+      403,
+      'You are not the author of this comment',
+    );
+  }
+}
+
+export class SelfSubscriptionNotAllowedException extends DomainException {
+  constructor() {
+    super(
+      'SELF_SUBSCRIPTION_NOT_ALLOWED',
+      409,
+      'You cannot subscribe to your own channel',
+    );
+  }
+}

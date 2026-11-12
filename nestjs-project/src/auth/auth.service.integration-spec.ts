@@ -34,6 +34,7 @@ import {
 } from './entities/verification-token.entity';
 import { Video } from '../videos/entities/video.entity';
 import { Category } from '../categories/entities/category.entity';
+import { Subscription } from '../channels/entities/subscription.entity';
 
 const ALL_ENTITIES = [
   User,
@@ -42,6 +43,7 @@ const ALL_ENTITIES = [
   VerificationToken,
   Video,
   Category,
+  Subscription,
 ];
 
 async function createAuthTestModule(): Promise<TestingModule> {

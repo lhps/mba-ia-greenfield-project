@@ -196,8 +196,9 @@ export class VideosController {
       'Returns the VideoDetail shape. Published videos (public or unlisted) are readable by anyone with the link; ' +
       'a draft is readable only by its owner. Optional bearer token: when valid it identifies the owner, ' +
       'when missing, invalid or expired the caller is treated as anonymous. `:id` is the video public_id. ' +
-      'Carries `view_count` and the owning `channel { nickname, name }`; the frontend compares `channel.nickname` ' +
-      'with the session channelSlug to decide whether to show the download button.',
+      'Carries `view_count`, `like_count`, `comment_count` and the owning `channel { nickname, name, subscriber_count }`; ' +
+      'the frontend compares `channel.nickname` with the session channelSlug to decide whether to show the download button. ' +
+      "Viewer state: `my_reaction` (the caller's like/dislike) and `channel.is_subscribed` — null / false when anonymous.",
   })
   @ApiResponse({ status: 200, type: VideoDetailDto })
   @ApiResponse({

@@ -1,3 +1,5 @@
+import { Module } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -12,6 +14,7 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { VerificationToken } from './entities/verification-token.entity';
 import { Video } from '../videos/entities/video.entity';
 import { Category } from '../categories/entities/category.entity';
+import { Subscription } from '../channels/entities/subscription.entity';
 
 const ALL_ENTITIES = [
   User,
@@ -20,6 +23,7 @@ const ALL_ENTITIES = [
   VerificationToken,
   Video,
   Category,
+  Subscription,
 ];
 
 describe('AuthModule', () => {
@@ -36,6 +40,29 @@ describe('AuthModule', () => {
     }).compile();
 
     expect(module).toBeDefined();
+    await module.close();
+  }, 30000);
+
+  it('should still provide JwtService to importers through AuthJwtModule', async () => {
+    @Module({
+      imports: [AuthModule],
+      providers: [{ provide: 'JWT', useExisting: JwtService }],
+      exports: ['JWT'],
+    })
+    class ImporterModule {}
+
+    const module = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          load: [appConfig, authConfig, mailConfig],
+        }),
+        TypeOrmModule.forRoot(createTestDataSource(ALL_ENTITIES).options),
+        ImporterModule,
+      ],
+    }).compile();
+
+    expect(module.get('JWT')).toBeInstanceOf(JwtService);
     await module.close();
   }, 30000);
 });
